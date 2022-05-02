@@ -10,11 +10,11 @@ SERVER_OBJS = $(addprefix $(OBJDIR)/, $(SERVER_SRCS:.c=.o))
 
 all: $(OBJDIR) client_0 server
 
-receiver_manager: $(CLIENT_OBJS)
+client_0: $(CLIENT_OBJS)
 	@echo "Making executable: "$@
 	@$(CC) $^ -o $@  -lm
 
-sender_manager: $(SERVER_OBJS)
+server: $(SERVER_OBJS)
 	@echo "Making executable: "$@
 	@$(CC) $^ -o $@  -lm
 
