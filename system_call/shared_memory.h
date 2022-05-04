@@ -4,6 +4,9 @@
 
 #pragma once
 
+#include <sys/shm.h>
+#include <stddef.h>
+
 int alloc_shared_memory(key_t shmKey, size_t size);
 void *get_shared_memory(int shmid, int shmflg);
 void free_shared_memory(void *ptr_sh);

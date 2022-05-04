@@ -7,16 +7,25 @@
 #include <stdlib.h>
 #include <sys/shm.h>
 #include <sys/ipc.h>
+#include <sys/stat.h>
 #include "err_exit.h"
 #include "defines.h"
 #include "shared_memory.h"
 #include "semaphore.h"
 #include "fifo.h"
+#include <linux/limits.h>
 
 int main(int argc, char * argv[]) {
     //Apertura strutture dati
+    mkfifo("/tmp/myfifo", S_IRUSR|S_IWUSR);
     int fifo = open("/tmp/myfifo", O_RDONLY);
-    key_t key = ftok("cio", 10);
+
+    char cwd[PATH_MAX];
+    if (getcwd(cwd, sizeof(cwd)) == NULL)
+        ErrExit("getcwd");
+
+    printf("%s %d\n", cwd, strlen(cwd));
+    key_t key = ftok(cwd, 1);
     printf("key = %d\n", key);
     int shMemId = alloc_shared_memory(key, sizeof(int));
     printf("shid = %d\n", shMemId);

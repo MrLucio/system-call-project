@@ -94,6 +94,10 @@ int main(int argc, char * argv[]) {
         return 1;
     }
     else {
+        char cwd[PATH_MAX];
+        if (getcwd(cwd, sizeof(cwd)) == NULL)
+            ErrExit("getcwd");
+
         searchPath = argv[1];
         char * username = getenv("USER");
         chdir(searchPath);    // TODO: errori
@@ -101,15 +105,14 @@ int main(int argc, char * argv[]) {
 
         search();
 
-        //char *fname = "/tmp/myfifo";
-        //mkfifo(fname, S_IRUSR|S_IWUSR);
-        //int fd = open(fname, O_WRONLY);
+        char *fname = "/tmp/myfifo";
+        mkfifo(fname, S_IRUSR|S_IWUSR);
+        int fd = open(fname, O_WRONLY);
 
-        //pathsNum = 10; // TODO
         char c[4] = {0};
         sprintf(c, "%d", pathsNum);
 
-        //write(fd, c, sizeof(3));
+        write(fd, c, sizeof(3));
 
         struct sembuf sem_p = {0, -1, 0};
         struct sembuf sem_v = {0, 1, 0};
@@ -118,6 +121,13 @@ int main(int argc, char * argv[]) {
         int sem_id = semget(IPC_PRIVATE, 1, IPC_CREAT | S_IRUSR | S_IWUSR);
         semctl(mutex_id, 0, SETVAL, 1); // TODO
         semctl(sem_id, 0, SETVAL, 0); // TODO
+
+        printf("%s %d\n", cwd, strlen(cwd));
+        key_t key = ftok(cwd, 1);
+        printf("key1: %d\n", key);
+
+        key_t key2 = ftok(cwd, 1);
+        printf("key2: %d\n", key2);
 
         for (int i = 0; i < pathsNum; i++) {
             int pid = fork();
