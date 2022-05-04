@@ -12,6 +12,11 @@
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/sem.h>
+#include <sys/wait.h>
+#include <math.h>
+#include <sys/sem.h>
+#include "err_exit.h"
 
 char *searchPath;
 char *searchPrefix = "sendme_";
@@ -66,11 +71,11 @@ void search() {
         errno = 0;
     }
 
-    if (errno != 0);
-        //errExit("readdir failed");
+    if (errno != 0)
+        ErrExit("readdir failed");
 
-    if (closedir(dirp) == -1);
-        //errExit("closedir failed");
+    if (closedir(dirp) == -1)
+        ErrExit("closedir failed");
 }
 
 void signalHandler(int sig) {
@@ -96,36 +101,70 @@ int main(int argc, char * argv[]) {
 
         search();
 
+        //char *fname = "/tmp/myfifo";
+        //mkfifo(fname, S_IRUSR|S_IWUSR);
+        //int fd = open(fname, O_WRONLY);
 
-        char *fname = "/tmp/myfifo";
-        mkfifo(fname, S_IRUSR|S_IWUSR);
-        int fd = open(fname, O_WRONLY);
+        //pathsNum = 10; // TODO
+        char c[4] = {0};
+        sprintf(c, "%d", pathsNum);
 
-        int n = 12;//pathsNum;
-        int count = 0;
-        while (n != 0) {
-            n /= 10;
-            count++;
-        }
+        //write(fd, c, sizeof(3));
 
-        char prova[] = "123";
-        write(fd, prova, sizeof(3));
-        exit(0);
+        struct sembuf sem_p = {0, -1, 0};
+        struct sembuf sem_v = {0, 1, 0};
+
+        int mutex_id = semget(IPC_PRIVATE, 1, IPC_CREAT | S_IRUSR | S_IWUSR);
+        int sem_id = semget(IPC_PRIVATE, 1, IPC_CREAT | S_IRUSR | S_IWUSR);
+        semctl(mutex_id, 0, SETVAL, 1); // TODO
+        semctl(sem_id, 0, SETVAL, 0); // TODO
 
         for (int i = 0; i < pathsNum; i++) {
             int pid = fork();
             if (pid == 0) {
-                printf("Sono un figlio,\t");
-                printf("%d) %s\t", i, paths[i]);
+                char* file_buffers[4];
+                //printf("%d) %s\t", i, paths[i]);
 
-                struct stat statbuf;
-                stat(paths[i], &statbuf);
-                printf("%ld\n", statbuf.st_size / sizeof(char));
+                int fd = open(paths[i], S_IRUSR);
+                off_t end_offset = lseek(fd, 0, SEEK_END);
+                //printf("c: %ld %ld\n", end_offset, end_offset/4);
+
+                if (end_offset >= 4000) {
+                    ErrExit("file size larger than 4KB\n");
+                    //exit(0);
+                }
+
+                int position = 0;
+                int window_size;
+                for (int j = 4; j > 0; j--) {
+                    lseek(fd, position, SEEK_SET);
+                    window_size = (end_offset - position + j - 1) / j; // ceil division of (end_offset - position) with j
+                    position += window_size;
+
+                    file_buffers[4 - i] = (char*) malloc(sizeof(char) * window_size + 1);
+                    ssize_t num_read = read(fd, file_buffers[4 - i], window_size);
+                    if (num_read == -1)
+                        ErrExit("read");
+                    file_buffers[4 - i][num_read] = '\0';
+                }
+
+                semop(mutex_id, &sem_p, 1);
+                if (semctl(sem_id, 0, GETNCNT) == pathsNum - 1)
+                    semctl(sem_id, 0, SETVAL, pathsNum);
+                semop(mutex_id, &sem_v, 1);
+
+                semop(sem_id, &sem_p, 1);
+
+                /*
+                    TODO: INVIO
+                */
+                
+                for (int j = 0; j < 4; j++) free(file_buffers[j]);
 
                 i = pathsNum;
             }
         }
-
+        while ( wait(NULL) != -1);
     }
 
     return 0;
