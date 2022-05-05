@@ -8,6 +8,7 @@
 #include <sys/shm.h>
 #include <sys/ipc.h>
 #include <sys/stat.h>
+#include <string.h>
 #include "err_exit.h"
 #include "defines.h"
 #include "shared_memory.h"
@@ -25,28 +26,26 @@ int main(int argc, char * argv[]) {
         ErrExit("getcwd");
 
     printf("%s %d\n", cwd, strlen(cwd));
-    key_t key = ftok(cwd, 1);
-    printf("key = %d\n", key);
-    int shMemId = alloc_shared_memory(key, sizeof(int));
-    printf("shid = %d\n", shMemId);
     //Ricezione numero file
     int numFile;
     char buffer_numFile[3];
     read(fifo, buffer_numFile, 3);
     numFile = atoi(buffer_numFile);
     //invio conferma ricezione
+    key_t key = ftok(cwd, 1);
+    printf("key = %d\n", key);
+    int shMemId = alloc_shared_memory(key, sizeof(int));
+    printf("shid = %d\n", shMemId);
     int *shms = (int *)get_shared_memory(shMemId, 0);
-    if (shms == (void *)-1)
-        printf("first shmat failed\n");
-    shms = 13;
-    shmdt(shms);
-    if (shmctl(shMemId, IPC_RMID, NULL) == -1)
-        printf("shmctl failed");
-    else
-        printf("shared memory segment removed successfully\n");
-    //*shms = "13";
+    printf("shmSegemt = %p\n", shms);
+    *shms = 1;
+    printf("shmSegemtValue = %d\n", *shms);
 
 
+
+    pause();
+    free_shared_memory(shms);
+    remove_shared_memory(shMemId);
     close(fifo);
     return 0;
 }
