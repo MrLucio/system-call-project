@@ -3,3 +3,6 @@
 ///         funzioni specifiche per la gestione delle FIFO.
 
 #pragma once
+
+void create_fifo();
+int open_fifo(int flag);
