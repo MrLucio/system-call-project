@@ -16,13 +16,26 @@
 #include "fifo.h"
 #include <linux/limits.h>
 
+void pathOutConcat(char *path, char *retBuf){
+    for (int i = strlen(path), j = i+4; i >= 0; i--,j--){
+        retBuf[j] = path[i];
+        if (path[i] == '.'){
+            retBuf[j-1] = 't';
+            retBuf[j-2] = 'u';
+            retBuf[j-3] = 'o';
+            retBuf[j-4] = '_';
+            j -= 4;
+        }
+    }
+}
+
 int main(int argc, char * argv[]) {
     //Apertura strutture dati
-    //create_fifo();
-    //int fifo = open_fifo(O_RDONLY);
+    create_fifo();
+    int fifo = open_fifo(O_RDONLY);
 
-    mkfifo("/tmp/myfifo", S_IRUSR|S_IWUSR);
-    int fifo = open("/tmp/myfifo", O_RDONLY);
+    //mkfifo("/tmp/myfifo", S_IRUSR|S_IWUSR);
+    //int fifo = open("/tmp/myfifo", O_RDONLY);
 
     char cwd[PATH_MAX];
     if (getcwd(cwd, sizeof(cwd)) == NULL)
@@ -45,30 +58,24 @@ int main(int argc, char * argv[]) {
     *shms = 1;
     printf("shmSegemtValue = %d\n", *shms);
 
-    char buffer_compFile[27];
-
-    printf("fifo = %d\n", fifo);
-
-    //int fileOpen;
+    int fileOpen;
     t_message msg;
-    if (read(fifo, &msg, sizeof(msg)) == -1) {
-        ErrExit("aiuto");
-    }
+    char newPath[PATH_MAX];
+    read_fifo(fifo, &msg, sizeof(msg));
     printf("pid = %d; path = %s; chunk = %s\n", msg.pid, msg.path, msg.chunk);
-    //read(fifo, buffer_compFile, 27);
-    //printf("pid = %d; path = %s; dati= %s\n", msg.pid, *msg.path, *msg.chunk);
-    //fileOpen = open(strcat(compFile->path ,"_out"), O_WRONLY | O_EXCL);
+    pathOutConcat(msg.path, newPath);
+    fileOpen = open(newPath, O_WRONLY | O_CREAT);
     //write(fileOpen, compFile->chunk, strlen(compFile->chunk));
     for (int i = 0; i < numFile; i++){
     }
 
-    //close(fileOpen);
+    close(fileOpen);
 
 
     
 
 
-    pause();
+    //pause();
     free_shared_memory(shms);
     remove_shared_memory(shMemId);
     close(fifo);
