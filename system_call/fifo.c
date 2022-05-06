@@ -22,3 +22,7 @@ int open_fifo(int flag){
     if (fifo == -1) ErrExit("open_fifo");
     return fifo;
 }
+
+void read_fifo(int fifo, void *buffer, size_t size){
+    if (read(fifo, buffer, size) == -1) ErrExit("read_fifo");
+}
