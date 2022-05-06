@@ -50,8 +50,18 @@ int main(int argc, char * argv[]) {
     printf("fifo = %d\n", fifo);
 
     //int fileOpen;
-    read(fifo, buffer_compFile, 27);
-    printf("path = %s\n", buffer_compFile);
+    t_message msg;
+    int len;
+    char s[13];
+    if (read(fifo, &len, sizeof(int)) == -1) {
+        ErrExit("aiuto");
+    }
+    if (read(fifo, s, 13) == -1) {
+        ErrExit("aiuto");
+    }
+    //read(fifo, buffer_compFile, 27);
+    //printf("pid = %d; path = %s; dati= %s\n", msg.pid, *msg.path_file, *msg.data);
+    printf("pid = %s, len = %d\n", s, len);
     //fileOpen = open(strcat(compFile->path_file ,"_out"), O_WRONLY | O_EXCL);
     //write(fileOpen, compFile->data, strlen(compFile->data));
     for (int i = 0; i < numFile; i++){

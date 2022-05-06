@@ -17,6 +17,7 @@
 #include <math.h>
 #include <sys/sem.h>
 #include "err_exit.h"
+#include "shared_memory.h"
 
 char *searchPath;
 char *searchPrefix = "sendme_";
@@ -112,7 +113,7 @@ int main(int argc, char * argv[]) {
         char c[4] = {0};
         sprintf(c, "%d", pathsNum);
 
-        write(fd, c, sizeof(3));
+        write(fd, c, strlen(c));
 
         struct sembuf sem_p = {0, -1, 0};
         struct sembuf sem_v = {0, 1, 0};
@@ -122,12 +123,11 @@ int main(int argc, char * argv[]) {
         semctl(mutex_id, 0, SETVAL, 1); // TODO
         semctl(sem_id, 0, SETVAL, 0); // TODO
 
-        printf("%s %d\n", cwd, strlen(cwd));
         key_t key = ftok(cwd, 1);
-        printf("key1: %d\n", key);
+        printf("key =  %d\n", key);
 
-        key_t key2 = ftok(cwd, 1);
-        printf("key2: %d\n", key2);
+        int shmid = alloc_shared_memory(key, sizeof(t_message));
+        printf("shmid = %d\n", shmid);
 
         for (int i = 0; i < pathsNum; i++) {
             int pid = fork();
@@ -175,6 +175,19 @@ int main(int argc, char * argv[]) {
             }
         }
         while ( wait(NULL) != -1);
+
+        //invio conferma ricezione
+        printf("%d\n", shmid);
+        int *shms = (int *)get_shared_memory(shmid, 0);
+        if (shms == (void *)-1)
+            printf("first shmat failed\n");
+        printf("%d\n", *shms);
+        shmdt(shms);
+        if (shmctl(shmid, IPC_RMID, NULL) == -1)
+            printf("shmctl failed");
+        else
+            printf("shared memory segment removed successfully\n");
+
     }
 
     return 0;
