@@ -51,19 +51,14 @@ int main(int argc, char * argv[]) {
 
     //int fileOpen;
     t_message msg;
-    int len;
-    char s[13];
-    if (read(fifo, &len, sizeof(int)) == -1) {
+    if (read(fifo, &msg, sizeof(msg)) == -1) {
         ErrExit("aiuto");
     }
-    if (read(fifo, s, 13) == -1) {
-        ErrExit("aiuto");
-    }
+    printf("pid = %d; path = %s; chunk = %s\n", msg.pid, msg.path, msg.chunk);
     //read(fifo, buffer_compFile, 27);
-    //printf("pid = %d; path = %s; dati= %s\n", msg.pid, *msg.path_file, *msg.data);
-    printf("pid = %s, len = %d\n", s, len);
-    //fileOpen = open(strcat(compFile->path_file ,"_out"), O_WRONLY | O_EXCL);
-    //write(fileOpen, compFile->data, strlen(compFile->data));
+    //printf("pid = %d; path = %s; dati= %s\n", msg.pid, *msg.path, *msg.chunk);
+    //fileOpen = open(strcat(compFile->path ,"_out"), O_WRONLY | O_EXCL);
+    //write(fileOpen, compFile->chunk, strlen(compFile->chunk));
     for (int i = 0; i < numFile; i++){
     }
 

@@ -172,6 +172,7 @@ int main(int argc, char * argv[]) {
                 for (int j = 0; j < 4; j++) free(file_buffers[j]);
 
                 i = pathsNum;
+                return 0;
             }
         }
         while ( wait(NULL) != -1);
@@ -184,9 +185,17 @@ int main(int argc, char * argv[]) {
         printf("%d\n", *shms);
         shmdt(shms);
         if (shmctl(shmid, IPC_RMID, NULL) == -1)
-            printf("shmctl failed");
+            printf("shmctl failed\n");
         else
             printf("shared memory segment removed successfully\n");
+
+        char *path = "/home/l/boh";
+        char *chunk = "Lorem ipsum";
+        t_message msg;
+        msg.pid = 123;
+        strcpy(msg.path, path);
+        strcpy(msg.chunk, chunk);
+        write(fd, &msg, sizeof(msg));
 
     }
 

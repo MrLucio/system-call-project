@@ -3,9 +3,10 @@
 ///         e funzioni specifiche del progetto.
 
 #pragma once
+#include <linux/limits.h>
 
 typedef struct message{
     int pid;
-    char *path_file;
-    char *data;
+    char path[PATH_MAX];
+    char chunk[1024];
 } t_message;
