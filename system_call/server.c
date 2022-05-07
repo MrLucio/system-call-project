@@ -10,15 +10,19 @@
 #include <sys/stat.h>
 #include <string.h>
 #include <signal.h>
+#include <linux/limits.h>
+#include <sys/msg.h>
 #include "err_exit.h"
 #include "defines.h"
 #include "shared_memory.h"
 #include "semaphore.h"
 #include "fifo.h"
-#include <linux/limits.h>
 
 int fifo1;
+int fifo2;
 int shMemId;
+int msQueId;
+
 
 void pathOutConcat(char *path, char *retBuf){
     for (int i = strlen(path), j = i+4; i >= 0; i--,j--){
@@ -40,12 +44,14 @@ void creatHeader(char header[], char n, char path[], char pid[], char channel[])
 void signalHandler(int sig) {
     printf("\nTerminazione programma\n");
     close(fifo1);
+    close(fifo2);
     remove_shared_memory(shMemId);
+    msgctl(msQueId, IPC_RMID, NULL);
     exit(0);
 }
 
 int main(int argc, char * argv[]) {
-    if (signal(SIGINT, signalHandler) == SIG_ERR) printf("Error\n");
+    if (signal(SIGINT, signalHandler) == SIG_ERR) ErrExit("set_signal");
     //get current directory
     char cwd[PATH_MAX];
     if (getcwd(cwd, sizeof(cwd)) == NULL) ErrExit("getcwd");
@@ -53,13 +59,20 @@ int main(int argc, char * argv[]) {
 
     //Apertura strutture dati
     //fifo_1
-    create_fifo("/tmp/myfifo");
-    fifo1 = open_fifo("/tmp/myfifo", O_RDONLY);
+    create_fifo("/tmp/fifo_1");
+    fifo1 = open_fifo("/tmp/fifo_1", O_RDONLY);
+    //fifo_2
+    create_fifo("/tmp/fifo_2");
+    fifo2 = open_fifo("/tmp/fifo_2", O_RDONLY);
     //Shared_Memory
     key_t key = ftok(cwd, 1);
     printf("key = %d\n", key);
     shMemId = alloc_shared_memory(key, sizeof(t_message));
     printf("shid = %d\n", shMemId);
+    //Message_Queue
+    msQueId = msgget(key, IPC_CREAT | S_IRUSR | S_IWUSR);
+    printf("msQueId = %d\n", msQueId);
+
 
     //Variabili ricezione numero file
     int numFile;
@@ -81,7 +94,7 @@ int main(int argc, char * argv[]) {
         shms = (int *)get_shared_memory(shMemId, 0);
         *shms = 1;
         free_shared_memory(shms);
-        
+
         //Ricezione dati
         read_fifo(fifo1, &msg, sizeof(msg));
         printf("pid = %d; path = %s; chunk = %s\n", msg.pid, msg.path, msg.chunk);
@@ -97,8 +110,13 @@ int main(int argc, char * argv[]) {
         fileOpen = open(newPath, O_WRONLY | O_CREAT, 0666);
         write(fileOpen, header, strlen(header));
         write(fileOpen, msg.chunk, strlen(msg.chunk));
-        close(fileOpen);    
+        close(fileOpen);
 
+        //Invio segnale terminazione
+        printf("Inviato segnale sulla message_queue di terminazione\n");
+        printf("Waiting for Ctrl-C to end...\n");
+        t_messageEnd endMsg = {200};
+        msgsnd(msQueId, &endMsg, sizeof(t_messageEnd), 0);
         pause();
     }
     

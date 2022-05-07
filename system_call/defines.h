@@ -10,3 +10,7 @@ typedef struct message{
     char path[PATH_MAX];
     char chunk[1024];
 } t_message;
+
+typedef struct messageEnd{
+    long mtype;
+} t_messageEnd;
