@@ -12,13 +12,13 @@
 
 char *fname = "/tmp/myfifo";
 
-void create_fifo(){
+void create_fifo(char *path){
     //if(mkfifo(fname, S_IRUSR|S_IWUSR) == -1) ErrExit("make_fifo");
-    mkfifo(fname, S_IRUSR|S_IWUSR);
+    mkfifo(path, S_IRUSR|S_IWUSR);
 }
 
-int open_fifo(int flag){
-    int fifo = open(fname, flag);
+int open_fifo(char *path, int flag){
+    int fifo = open(path, flag);
     if (fifo == -1) ErrExit("open_fifo");
     return fifo;
 }
