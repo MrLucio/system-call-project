@@ -11,6 +11,11 @@ typedef struct message{
     char chunk[1024];
 } t_message;
 
+typedef struct messageQue{
+    long mtype;
+    t_message msg;
+} t_messageQue;
+
 typedef struct messageEnd{
     long mtype;
 } t_messageEnd;

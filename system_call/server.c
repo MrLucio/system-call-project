@@ -63,7 +63,7 @@ int main(int argc, char * argv[]) {
     fifo1 = open_fifo("/tmp/fifo_1", O_RDONLY);
     //fifo_2
     create_fifo("/tmp/fifo_2");
-    fifo2 = open_fifo("/tmp/fifo_2", O_RDONLY);
+    fifo2 = open_fifo("/tmp/fifo_2", O_RDONLY | O_NONBLOCK);
     //Shared_Memory
     key_t key = ftok(cwd, 1);
     printf("key = %d\n", key);
@@ -80,37 +80,76 @@ int main(int argc, char * argv[]) {
     //Variabili invio conferma ricezione
     int *shms;
     //Variabili ricezione dati
-    t_message msg;
+    int newMsg;
+    t_message *shMem;
+    t_message msg, empty = {-1};
+    t_messageQue msgQue;
     //Variabili scrittura dati
     int fileOpen;
-    char header[PATH_MAX], itoch, pidStr[5], channel[9], newPath[PATH_MAX];
+    char header[PATH_MAX], num, pidStr[5], channel[9], newPath[PATH_MAX];
 
     while (1){
         //Ricezione numero file
         read(fifo1, buffer_numFile, 3);
         numFile = atoi(buffer_numFile);
         printf("Numero di file = %d\n", numFile);
+        fifo1 = open_fifo("/tmp/fifo_1", O_RDONLY | O_NONBLOCK);
         //Invio conferma ricezione numero file
         shms = (int *)get_shared_memory(shMemId, 0);
         *shms = 1;
         free_shared_memory(shms);
 
+        shMem = (t_message *)get_shared_memory(shMemId, 0);
+        newMsg = 0;
+        sleep(1);
         //Ricezione dati
-        read_fifo(fifo1, &msg, sizeof(msg));
-        printf("pid = %d; path = %s; chunk = %s\n", msg.pid, msg.path, msg.chunk);
+        //FIFO1
+        if(read(fifo1, &msg, sizeof(msg)) > 0){
+            printf("FIFO1:pid = %d; path = %s; chunk = %s\n", msg.pid, msg.path, msg.chunk);
+            newMsg = 1;
+            num = '1';
+            sprintf(channel, "FIFO1");
+        }
+        //FIFO2
+        else if(read(fifo2, &msg, sizeof(msg)) > 0){
+            printf("FIFO2: pid = %d; path = %s; chunk = %s\n", msg.pid, msg.path, msg.chunk);
+            newMsg = 1;
+            num = '2';
+            sprintf(channel, "FIFO2");
+        }
+        //SharedMemory
+        else if (!((*shMem).pid == empty.pid)){
+            msg = *shMem;
+            printf("ShMem: pid = %d; path = %s; chunk = %s\n", msg.pid, msg.path, msg.chunk);
+            newMsg = 1;
+            num = '3';
+            sprintf(channel, "ShdMem");
+            *shMem = empty;
+        }
+        //MessageQueue
+        else if(msgrcv(msQueId, &msgQue, sizeof(t_message), 1, IPC_NOWAIT) != -1){
+            msg = msgQue.msg;
+            printf("MsgQueue: pid = %d; path = %s; chunk = %s\n", msg.pid, msg.path, msg.chunk);
+            newMsg = 1;
+            num = '4';
+            sprintf(channel, "MsgQueue");
+        }
         //Creazione header
-        sprintf(header, "\n[Parte ");
-        itoch = '1';
-        sprintf(pidStr, "%d", msg.pid);
-        sprintf(channel, "FIFO1");
-        creatHeader(header, itoch, msg.path, pidStr, channel);
-        printf("head = %s\n", header);
-        //Scrittura su file
-        pathOutConcat(msg.path, newPath);
-        fileOpen = open(newPath, O_WRONLY | O_CREAT, 0666);
-        write(fileOpen, header, strlen(header));
-        write(fileOpen, msg.chunk, strlen(msg.chunk));
-        close(fileOpen);
+        if (newMsg){
+            sprintf(header, "\n[Parte ");
+            sprintf(pidStr, "%d", msg.pid);
+            creatHeader(header, num, msg.path, pidStr, channel);
+            printf("head = %s\n", header);
+            //Scrittura su file
+            pathOutConcat(msg.path, newPath);
+            fileOpen = open(newPath, O_WRONLY | O_CREAT | O_APPEND, 0666);
+            write(fileOpen, header, strlen(header));
+            write(fileOpen, msg.chunk, strlen(msg.chunk));
+            close(fileOpen);
+
+            newMsg = 0;
+        }
+        
 
         //Invio segnale terminazione
         printf("Inviato segnale sulla message_queue di terminazione\n");
