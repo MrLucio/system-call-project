@@ -162,8 +162,8 @@ int main(int argc, char * argv[]) {
                 printf("mess_ricevuti = %d\n\n", msgReciv);
             }
         }
-        
-        
+
+
 
         //Invio segnale terminazione
         printf("Inviato segnale sulla message_queue di terminazione\n");
