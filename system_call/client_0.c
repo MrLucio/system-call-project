@@ -15,14 +15,25 @@
 #include <sys/sem.h>
 #include <sys/wait.h>
 #include <math.h>
-#include <sys/sem.h>
 #include "err_exit.h"
 #include "shared_memory.h"
+#include "fifo.h"
 
 char *searchPath;
 char *searchPrefix = "sendme_";
 int pathsNum = 0;
 char *paths[100];
+
+#ifndef SEMUN_H
+#define SEMUN_H
+#include <sys/sem.h>
+// definition of the union semun
+union semun {
+    int val;
+    struct semid_ds * buf;
+    unsigned short * array;
+};
+#endif
 
 size_t append2Path(char *directory) {
     size_t lastPathEnd = strlen(searchPath);
@@ -106,40 +117,42 @@ int main(int argc, char * argv[]) {
 
         search();
 
-        char *fname = "/tmp/myfifo";
-        mkfifo(fname, S_IRUSR|S_IWUSR);
-        int fd = open(fname, O_WRONLY);
+        create_fifo("/tmp/fifo_1");
+        int fifo1 = open_fifo("/tmp/fifo_1", O_WRONLY);
+
+        create_fifo("/tmp/fifo_2");
+        int fifo2 = open_fifo("/tmp/fifo_2", O_WRONLY);
 
         char c[4] = {0};
         sprintf(c, "%d", pathsNum);
 
-        write(fd, c, strlen(c));
+        write(fifo1, c, strlen(c));
 
         struct sembuf sem_p = {0, -1, 0};
         struct sembuf sem_v = {0, 1, 0};
+        struct sembuf sem_wait_zero = {0, 0, 0};
 
-        int mutex_id = semget(IPC_PRIVATE, 1, IPC_CREAT | S_IRUSR | S_IWUSR);
+        union semun args;
+        args.val = pathsNum;
+
         int sem_id = semget(IPC_PRIVATE, 1, IPC_CREAT | S_IRUSR | S_IWUSR);
-        semctl(mutex_id, 0, SETVAL, 1); // TODO
-        semctl(sem_id, 0, SETVAL, 0); // TODO
+        semctl(sem_id, 0, SETVAL, args);
 
         key_t key = ftok(cwd, 1);
         printf("key =  %d\n", key);
 
-        int shmid = alloc_shared_memory(key, sizeof(t_message));
-        printf("shmid = %d\n", shmid);
+        int shmid = alloc_shared_memory(key, sizeof(t_message) * pathsNum);
+        //printf("shmid = %d\n", shmid);
 
         for (int i = 0; i < pathsNum; i++) {
             int pid = fork();
             if (pid == 0) {
-                char* file_buffers[4];
-                //printf("%d) %s\t", i, paths[i]);
+                t_message messages[4];
 
-                int fd = open(paths[i], S_IRUSR);
+                int fd = open(paths[i], O_RDONLY);
                 off_t end_offset = lseek(fd, 0, SEEK_END);
-                //printf("c: %ld %ld\n", end_offset, end_offset/4);
 
-                if (end_offset >= 4000) {
+                if (end_offset >= 4096) {
                     ErrExit("file size larger than 4KB\n");
                     //exit(0);
                 }
@@ -151,25 +164,24 @@ int main(int argc, char * argv[]) {
                     window_size = (end_offset - position + j - 1) / j; // ceil division of (end_offset - position) with j
                     position += window_size;
 
-                    file_buffers[4 - i] = (char*) malloc(sizeof(char) * window_size + 1);
-                    ssize_t num_read = read(fd, file_buffers[4 - i], window_size);
+                    messages[4 - j].pid = getpid();
+                    strcpy(messages[4 - j].path, paths[4 - j]);
+                    
+                    ssize_t num_read = read(fd, messages[4 - j].chunk, window_size);
                     if (num_read == -1)
                         ErrExit("read");
-                    file_buffers[4 - i][num_read] = '\0';
+                    messages[4 - j].chunk[num_read] = '\0';
                 }
 
-                semop(mutex_id, &sem_p, 1);
-                if (semctl(sem_id, 0, GETNCNT) == pathsNum - 1)
-                    semctl(sem_id, 0, SETVAL, pathsNum);
-                semop(mutex_id, &sem_v, 1);
-
                 semop(sem_id, &sem_p, 1);
+                semop(sem_id, &sem_wait_zero, 1);
+
+                write(fifo1, &messages[0], sizeof(t_message));
+                write(fifo2, &messages[1], sizeof(t_message));
 
                 /*
                     TODO: INVIO
                 */
-                
-                for (int j = 0; j < 4; j++) free(file_buffers[j]);
 
                 i = pathsNum;
                 return 0;
@@ -178,17 +190,19 @@ int main(int argc, char * argv[]) {
         while ( wait(NULL) != -1);
 
         //invio conferma ricezione
-        printf("%d\n", shmid);
+        //printf("%d\n", shmid);
         int *shms = (int *)get_shared_memory(shmid, 0);
         if (shms == (void *)-1)
             printf("first shmat failed\n");
-        printf("%d\n", *shms);
+        //printf("%d\n", *shms);
+        sleep(2);
         shmdt(shms);
         if (shmctl(shmid, IPC_RMID, NULL) == -1)
-            printf("shmctl failed\n");
-        else
-            printf("shared memory segment removed successfully\n");
+            ErrExit("shmctl failed\n");
+        else;
+            //printf("shared memory segment removed successfully\n");
 
+        /*
         char *path = "/home/l/boh";
         char *chunk = "Lorem ipsum";
         t_message msg;
@@ -196,6 +210,7 @@ int main(int argc, char * argv[]) {
         strcpy(msg.path, path);
         strcpy(msg.chunk, chunk);
         write(fd, &msg, sizeof(msg));
+        */
 
     }
 
