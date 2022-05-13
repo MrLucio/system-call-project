@@ -18,11 +18,13 @@
 #include "err_exit.h"
 #include "shared_memory.h"
 #include "fifo.h"
+#include <sys/msg.h>
 
 char *searchPath;
 char *searchPrefix = "sendme_";
 int pathsNum = 0;
 char *paths[100];
+int msQueId;
 
 #ifndef SEMUN_H
 #define SEMUN_H
@@ -139,7 +141,10 @@ int main(int argc, char * argv[]) {
         semctl(sem_id, 0, SETVAL, args);
 
         key_t key = ftok(cwd, 1);
-        printf("key =  %d\n", key);
+        //printf("key =  %d\n", key);
+
+        t_messageQue msgQue;
+        msQueId = msgget(key, IPC_CREAT | S_IRUSR | S_IWUSR);
 
         int shmid = alloc_shared_memory(key, sizeof(t_message) * pathsNum);
         //printf("shmid = %d\n", shmid);
@@ -165,7 +170,7 @@ int main(int argc, char * argv[]) {
                     position += window_size;
 
                     messages[4 - j].pid = getpid();
-                    strcpy(messages[4 - j].path, paths[4 - j]);
+                    strcpy(messages[4 - j].path, paths[i]);
                     
                     ssize_t num_read = read(fd, messages[4 - j].chunk, window_size);
                     if (num_read == -1)
@@ -176,8 +181,12 @@ int main(int argc, char * argv[]) {
                 semop(sem_id, &sem_p, 1);
                 semop(sem_id, &sem_wait_zero, 1);
 
+                msgQue.mtype = 1;
+                msgQue.msg = messages[3];
+
                 write(fifo1, &messages[0], sizeof(t_message));
                 write(fifo2, &messages[1], sizeof(t_message));
+                msgsnd(msQueId, &msgQue, sizeof(t_message), 0);
 
                 /*
                     TODO: INVIO

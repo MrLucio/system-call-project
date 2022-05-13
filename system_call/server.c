@@ -27,24 +27,9 @@ int numFile;
 
 void pathOutConcat(char *path, char *retBuf){
     int point = 0;
-    for (int i = strlen(path), j = i+4; i >= 0; i--,j--){
-        retBuf[j] = path[i];
-        if (path[i] == '.'){
-            point = 1;
-            retBuf[j-1] = 't';
-            retBuf[j-2] = 'u';
-            retBuf[j-3] = 'o';
-            retBuf[j-4] = '_';
-            j -= 4;
-        }
-    }
     if(!point){
         strcat(retBuf, "_out");
     }
-}
-
-void creatHeader(char header[], char n, char path[], char pid[], char channel[]){
-    strcat(strcat(strcat(strcat(strcat(strcat(strcat(strcat(header, &n), " del file \""), path), "\", spedita dal processo "), pid), " tramite "), channel), "]\n");
 }
 
 void signalHandler(int sig) {
@@ -96,7 +81,7 @@ int main(int argc, char * argv[]) {
     t_messageQue msgQue;
     //Variabili scrittura dati
     int fileOpen;
-    char header[PATH_MAX], num, pidStr[5], channel[9], newPath[PATH_MAX];
+    char header[PATH_MAX], num, channel[9];
 
     while (1){
         //Ricezione numero file
@@ -123,7 +108,7 @@ int main(int argc, char * argv[]) {
                 //printf("FIFO1:pid = %d; path = %s; chunk = %s\n", msg.pid, msg.path, msg.chunk);
                 newMsg = 1;
                 num = '1';
-                sprintf(channel, "FIFO1");
+                strcpy(channel, "FIFO1");
             }
             //FIFO2
             else if(read(fifo2, &msg, sizeof(msg)) > 0){
@@ -133,6 +118,7 @@ int main(int argc, char * argv[]) {
                 sprintf(channel, "FIFO2");
             }
             //SharedMemory
+            // semctl(sem_id, 1, GETVAL) > 0;
             else if (chkSharedMemory(shMem) != (t_message *)-1){
                 msg = *chkSharedMemory(shMem);
                 //printf("ShMem: pid = %d; path = %s; chunk = %s\n", msg.pid, msg.path, msg.chunk);
@@ -151,20 +137,18 @@ int main(int argc, char * argv[]) {
             }
             //Creazione header
             if (newMsg){
-                sprintf(header, "\n[Parte ");
-                sprintf(pidStr, "%d", msg.pid);
-                creatHeader(header, num, msg.path, pidStr, channel);
-                printf("%s", header);
+                sprintf(header, "[Parte %c del file \"%s\", spedita dal processo %d tramite %s]\n", num, msg.path, msg.pid, channel);
                 //Scrittura su file
-                pathOutConcat(msg.path, newPath);
-                fileOpen = open(newPath, O_WRONLY | O_CREAT | O_APPEND, 0666);
+                strcat(msg.path, "_out");
+                fileOpen = open(msg.path, O_WRONLY | O_CREAT | O_APPEND, 0666);
                 write(fileOpen, header, strlen(header));
                 write(fileOpen, msg.chunk, strlen(msg.chunk));
+                write(fileOpen, "\n", sizeof(char));
                 close(fileOpen);
 
                 msgReciv ++;
                 newMsg = 0;
-                printf("mess_ricevuti = %d\n\n", msgReciv);
+                printf("\nchannel= %s; mess_ricevuti = %d\n", channel, msgReciv);
             }
         }
 
