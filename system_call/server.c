@@ -26,15 +26,20 @@ int numFile;
 
 
 void pathOutConcat(char *path, char *retBuf){
+    int point = 0;
     for (int i = strlen(path), j = i+4; i >= 0; i--,j--){
         retBuf[j] = path[i];
         if (path[i] == '.'){
+            point = 1;
             retBuf[j-1] = 't';
             retBuf[j-2] = 'u';
             retBuf[j-3] = 'o';
             retBuf[j-4] = '_';
             j -= 4;
         }
+    }
+    if(!point){
+        strcat(retBuf, "_out");
     }
 }
 
