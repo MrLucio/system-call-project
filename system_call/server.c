@@ -36,14 +36,6 @@ int shMemId;
 int msQueId;
 int numFile;
 
-
-void pathOutConcat(char *path, char *retBuf){
-    int point = 0;
-    if(!point){
-        strcat(retBuf, "_out");
-    }
-}
-
 void signalHandler(int sig) {
     printf("\nTerminazione programma\n");
     close(fifo1);
@@ -137,7 +129,7 @@ int main(int argc, char * argv[]) {
                 newMsg = 1;
                 num = 3;
                 strcpy(channel, "ShdMem");
-                //*chkSharedMemory(shMem) = empty;
+                *chkSharedMemory(shMem) = empty;
                 semop(sem_msgShMem, &sem_p, 1);
             }
             //MessageQueue
@@ -151,12 +143,12 @@ int main(int argc, char * argv[]) {
             if (newMsg){
                 sprintf(header, "[Parte %d del file \"%s\", spedita dal processo %d tramite %s]\n", num, msg.path, msg.pid, channel);
                 //Scrittura su file
-                strcat(msg.path, "_out");/*
+                strcat(msg.path, "_out");
                 fileOpen = open(msg.path, O_WRONLY | O_CREAT | O_APPEND, 0666);
                 write(fileOpen, header, strlen(header));
                 write(fileOpen, msg.chunk, strlen(msg.chunk));
                 write(fileOpen, "\n", sizeof(char));
-                close(fileOpen);*/
+                close(fileOpen);
 
                 msgReciv ++;
                 newMsg = 0;
