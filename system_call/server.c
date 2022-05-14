@@ -12,11 +12,23 @@
 #include <signal.h>
 #include <linux/limits.h>
 #include <sys/msg.h>
+#include <sys/sem.h>
 #include "err_exit.h"
 #include "defines.h"
 #include "shared_memory.h"
 #include "semaphore.h"
 #include "fifo.h"
+
+#ifndef SEMUN_H
+#define SEMUN_H
+#include <sys/sem.h>
+// definition of the union semun
+union semun {
+    int val;
+    struct semid_ds * buf;
+    unsigned short * array;
+};
+#endif
 
 int fifo1;
 int fifo2;
@@ -55,7 +67,6 @@ int main(int argc, char * argv[]) {
     //get current directory
     char cwd[PATH_MAX];
     if (getcwd(cwd, sizeof(cwd)) == NULL) ErrExit("getcwd");
-    printf("current wd = %s\n", cwd);
 
     //Apertura strutture dati
     //fifo_1
@@ -67,7 +78,6 @@ int main(int argc, char * argv[]) {
     //Message_Queue
     key_t key = ftok(cwd, 1);
     msQueId = msgget(key, IPC_CREAT | S_IRUSR | S_IWUSR);
-    printf("msQueId = %d\n", msQueId);
 
 
     //Variabili ricezione numero file
@@ -75,14 +85,20 @@ int main(int argc, char * argv[]) {
     //Variabili invio conferma ricezione
     int *shms;
     //Variabili ricezione dati
+    union semun args;
+    args.val = 0;
+    int sem_msgShMem = semget(key, 1, IPC_CREAT | S_IRUSR | S_IWUSR);
+    semctl(sem_msgShMem, 0, SETVAL, args);
+    struct sembuf sem_p = {0, -1, 0};
     int newMsg, msgReciv = 0;
     t_message *shMem;
     t_message msg, empty = {-1};
     t_messageQue msgQue;
     //Variabili scrittura dati
-    int fileOpen;
-    char header[PATH_MAX], num, channel[9];
+    int fileOpen, num;
+    char header[PATH_MAX], channel[9];
 
+    printf("sem: %d\n", semctl(sem_msgShMem, 0, GETVAL));
     while (1){
         //Ricezione numero file
         read(fifo1, buffer_numFile, 3);
@@ -93,7 +109,6 @@ int main(int argc, char * argv[]) {
         //Shared_Memory
         int size = sizeof(t_message)*numFile;
         shMemId = alloc_shared_memory(key, size);
-        printf("shid = %d\n", shMemId);
         shms = (int *)get_shared_memory(shMemId, 0);
         *shms = 1;
         free_shared_memory(shms);
@@ -105,46 +120,43 @@ int main(int argc, char * argv[]) {
         while (msgReciv < numFile*4){
             //FIFO1
             if(read(fifo1, &msg, sizeof(msg)) > 0){
-                //printf("FIFO1:pid = %d; path = %s; chunk = %s\n", msg.pid, msg.path, msg.chunk);
                 newMsg = 1;
-                num = '1';
+                num = 1;
                 strcpy(channel, "FIFO1");
             }
             //FIFO2
             else if(read(fifo2, &msg, sizeof(msg)) > 0){
-                //printf("FIFO2: pid = %d; path = %s; chunk = %s\n", msg.pid, msg.path, msg.chunk);
                 newMsg = 1;
-                num = '2';
-                sprintf(channel, "FIFO2");
+                num = 2;
+                strcpy(channel, "FIFO2");
             }
             //SharedMemory
-            // semctl(sem_id, 1, GETVAL) > 0;
-            else if (chkSharedMemory(shMem) != (t_message *)-1){
+            else if (semctl(sem_msgShMem, 0, GETVAL) > 0){
+                printf("sem: %d\n", semctl(sem_msgShMem, 0, GETVAL));
                 msg = *chkSharedMemory(shMem);
-                //printf("ShMem: pid = %d; path = %s; chunk = %s\n", msg.pid, msg.path, msg.chunk);
                 newMsg = 1;
-                num = '3';
-                sprintf(channel, "ShdMem");
-                *chkSharedMemory(shMem) = empty;
+                num = 3;
+                strcpy(channel, "ShdMem");
+                //*chkSharedMemory(shMem) = empty;
+                semop(sem_msgShMem, &sem_p, 1);
             }
             //MessageQueue
             else if(msgrcv(msQueId, &msgQue, sizeof(t_message), 1, IPC_NOWAIT) != -1){
                 msg = msgQue.msg;
-                //printf("MsgQueue: pid = %d; path = %s; chunk = %s\n", msg.pid, msg.path, msg.chunk);
                 newMsg = 1;
-                num = '4';
-                sprintf(channel, "MsgQueue");
+                num = 4;
+                strcpy(channel, "MsgQueue");
             }
             //Creazione header
             if (newMsg){
-                sprintf(header, "[Parte %c del file \"%s\", spedita dal processo %d tramite %s]\n", num, msg.path, msg.pid, channel);
+                sprintf(header, "[Parte %d del file \"%s\", spedita dal processo %d tramite %s]\n", num, msg.path, msg.pid, channel);
                 //Scrittura su file
-                strcat(msg.path, "_out");
+                strcat(msg.path, "_out");/*
                 fileOpen = open(msg.path, O_WRONLY | O_CREAT | O_APPEND, 0666);
                 write(fileOpen, header, strlen(header));
                 write(fileOpen, msg.chunk, strlen(msg.chunk));
                 write(fileOpen, "\n", sizeof(char));
-                close(fileOpen);
+                close(fileOpen);*/
 
                 msgReciv ++;
                 newMsg = 0;

@@ -136,12 +136,16 @@ int main(int argc, char * argv[]) {
 
         union semun args;
         args.val = pathsNum;
-
-        int sem_id = semget(IPC_PRIVATE, 1, IPC_CREAT | S_IRUSR | S_IWUSR);
-        semctl(sem_id, 0, SETVAL, args);
-
+        
         key_t key = ftok(cwd, 1);
         //printf("key =  %d\n", key);
+
+        int sem_id = semget(IPC_PRIVATE, 1, IPC_CREAT | S_IRUSR | S_IWUSR);
+        int sem_msgShMem = semget(key, 1, IPC_CREAT | S_IRUSR | S_IWUSR);
+        semctl(sem_id, 0, SETVAL, args);
+        args.val = 0;
+        semctl(sem_msgShMem, 0, SETVAL, args);
+
 
         t_messageQue msgQue;
         msQueId = msgget(key, IPC_CREAT | S_IRUSR | S_IWUSR);
@@ -183,6 +187,8 @@ int main(int argc, char * argv[]) {
 
                 msgQue.mtype = 1;
                 msgQue.msg = messages[3];
+
+                //semop(sem_msgShMem, &sem_v, 1);
 
                 write(fifo1, &messages[0], sizeof(t_message));
                 write(fifo2, &messages[1], sizeof(t_message));
