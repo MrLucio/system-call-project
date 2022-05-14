@@ -133,25 +133,43 @@ int main(int argc, char * argv[]) {
         struct sembuf sem_p = {0, -1, 0};
         struct sembuf sem_v = {0, 1, 0};
         struct sembuf sem_wait_zero = {0, 0, 0};
-
-        union semun args;
-        args.val = pathsNum;
         
         key_t key = ftok(cwd, 1);
-        //printf("key =  %d\n", key);
 
         int sem_id = semget(IPC_PRIVATE, 1, IPC_CREAT | S_IRUSR | S_IWUSR);
         int sem_msgShMem = semget(key, 1, IPC_CREAT | S_IRUSR | S_IWUSR);
-        semctl(sem_id, 0, SETVAL, args);
-        args.val = 0;
-        semctl(sem_msgShMem, 0, SETVAL, args);
+        int mutex_ShMem = semget(IPC_PRIVATE, 1, IPC_CREAT | S_IRUSR | S_IWUSR);
 
+        union semun args;
+        args.val = pathsNum;
+
+        semctl(sem_id, 0, SETVAL, args);
+
+        args.val = 0;
+        semctl(sem_msgShMem, 0, SETVAL, 0);
+        args.val = 1;
+        semctl(mutex_ShMem, 0, SETVAL, 1);
 
         t_messageQue msgQue;
         msQueId = msgget(key, IPC_CREAT | S_IRUSR | S_IWUSR);
 
         int shmid = alloc_shared_memory(key, sizeof(t_message) * pathsNum);
-        //printf("shmid = %d\n", shmid);
+        int *shms = (int *) get_shared_memory(shmid, 0);
+
+        semop(sem_msgShMem, &sem_p, 1);
+        
+        if (*shms != pathsNum) {
+            printf("Error with shmem confirmation %d %d\n", *shms, pathsNum);
+            exit(1);
+        }
+
+        t_message *shmem = (t_message *) shms;
+
+        int shmem_counter_id = alloc_shared_memory(IPC_PRIVATE, sizeof(int));
+        int *shmem_counter = (int *) get_shared_memory(shmem_counter_id, 0);
+
+        /*if (shms == (void *)-1)
+            printf("first shmat failed\n");*/
 
         for (int i = 0; i < pathsNum; i++) {
             int pid = fork();
@@ -162,8 +180,8 @@ int main(int argc, char * argv[]) {
                 off_t end_offset = lseek(fd, 0, SEEK_END);
 
                 if (end_offset >= 4096) {
-                    ErrExit("file size larger than 4KB\n");
-                    //exit(0);
+                    printf("file size larger than 4KB\n");
+                    exit(0);
                 }
 
                 int position = 0;
@@ -188,45 +206,29 @@ int main(int argc, char * argv[]) {
                 msgQue.mtype = 1;
                 msgQue.msg = messages[3];
 
-                //semop(sem_msgShMem, &sem_v, 1);
-
                 write(fifo1, &messages[0], sizeof(t_message));
                 write(fifo2, &messages[1], sizeof(t_message));
+
+                //memcpy(shmem, &messages[2], sizeof(t_message));
+                semop(mutex_ShMem, &sem_p, 1);
+                *(shmem + (*shmem_counter)++) = messages[2];
+                semop(sem_msgShMem, &sem_v, 1);
+                semop(mutex_ShMem, &sem_v, 1);
+
                 msgsnd(msQueId, &msgQue, sizeof(t_message), 0);
 
-                /*
-                    TODO: INVIO
-                */
-
-                i = pathsNum;
-                return 0;
+                exit(0);
             }
         }
-        while ( wait(NULL) != -1);
+        while (wait(NULL) != -1);
 
         //invio conferma ricezione
-        //printf("%d\n", shmid);
-        int *shms = (int *)get_shared_memory(shmid, 0);
-        if (shms == (void *)-1)
-            printf("first shmat failed\n");
-        //printf("%d\n", *shms);
-        sleep(2);
         shmdt(shms);
+
         if (shmctl(shmid, IPC_RMID, NULL) == -1)
             ErrExit("shmctl failed\n");
-        else;
-            //printf("shared memory segment removed successfully\n");
-
-        /*
-        char *path = "/home/l/boh";
-        char *chunk = "Lorem ipsum";
-        t_message msg;
-        msg.pid = 123;
-        strcpy(msg.path, path);
-        strcpy(msg.chunk, chunk);
-        write(fd, &msg, sizeof(msg));
-        */
-
+        else
+            printf("shared memory segment removed successfully\n");
     }
 
     return 0;

@@ -45,15 +45,6 @@ void signalHandler(int sig) {
     exit(0);
 }
 
-t_message* chkSharedMemory(t_message *shMem){
-    for (int i = 0; i < numFile; i++){
-        if (shMem[i].pid != -1){
-            return &shMem[i];
-        }
-    }
-    return (t_message *)-1;
-}
-
 int main(int argc, char * argv[]) {
     if (signal(SIGINT, signalHandler) == SIG_ERR) ErrExit("set_signal");
     //get current directory
@@ -82,6 +73,7 @@ int main(int argc, char * argv[]) {
     int sem_msgShMem = semget(key, 1, IPC_CREAT | S_IRUSR | S_IWUSR);
     semctl(sem_msgShMem, 0, SETVAL, args);
     struct sembuf sem_p = {0, -1, 0};
+    struct sembuf sem_v = {0, 1, 0};
     int newMsg, msgReciv = 0;
     t_message *shMem;
     t_message msg, empty = {-1};
@@ -101,13 +93,12 @@ int main(int argc, char * argv[]) {
         //Shared_Memory
         int size = sizeof(t_message)*numFile;
         shMemId = alloc_shared_memory(key, size);
-        shms = (int *)get_shared_memory(shMemId, 0);
-        *shms = 1;
-        free_shared_memory(shms);
-
-        shMem = (t_message *)get_shared_memory(shMemId, 0);
+        shms = (int *) get_shared_memory(shMemId, 0);
+        *shms = numFile;
+        semop(sem_msgShMem, &sem_v, 1);
+        shMem = (t_message *)shms;
+        //shMem = (t_message *)get_shared_memory(shMemId, 0);
         newMsg = 0;
-        sleep(1);
         //Ricezione dati
         while (msgReciv < numFile*4){
             //FIFO1
@@ -124,12 +115,10 @@ int main(int argc, char * argv[]) {
             }
             //SharedMemory
             else if (semctl(sem_msgShMem, 0, GETVAL) > 0){
-                printf("sem: %d\n", semctl(sem_msgShMem, 0, GETVAL));
-                msg = *chkSharedMemory(shMem);
+                msg = *shMem++;
                 newMsg = 1;
                 num = 3;
                 strcpy(channel, "ShdMem");
-                *chkSharedMemory(shMem) = empty;
                 semop(sem_msgShMem, &sem_p, 1);
             }
             //MessageQueue
