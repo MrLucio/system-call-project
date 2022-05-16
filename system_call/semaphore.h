@@ -3,3 +3,5 @@
 ///         specifiche per la gestione dei SEMAFORI.
 
 #pragma once
+
+void semOp (int semid, unsigned short sem_num, short sem_op);

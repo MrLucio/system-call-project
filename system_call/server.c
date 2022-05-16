@@ -60,6 +60,7 @@ int main(int argc, char * argv[]) {
     fifo2 = open_fifo("/tmp/fifo_2", O_RDONLY | O_NONBLOCK);
     //Message_Queue
     key_t key = ftok(cwd, 1);
+    key_t key_limits = ftok(cwd, 2);
     msQueId = msgget(key, IPC_CREAT | S_IRUSR | S_IWUSR);
 
 
@@ -71,9 +72,8 @@ int main(int argc, char * argv[]) {
     union semun args;
     args.val = 0;
     int sem_msgShMem = semget(key, 1, IPC_CREAT | S_IRUSR | S_IWUSR);
+    int sem_limits = semget(key_limits, 4, IPC_CREAT | S_IRUSR | S_IWUSR);
     semctl(sem_msgShMem, 0, SETVAL, args);
-    struct sembuf sem_p = {0, -1, 0};
-    struct sembuf sem_v = {0, 1, 0};
     int newMsg, msgReciv = 0;
     t_message *shMem;
     t_message msg;
@@ -92,11 +92,12 @@ int main(int argc, char * argv[]) {
         fifo1 = open_fifo("/tmp/fifo_1", O_RDONLY | O_NONBLOCK);
         //Invio conferma ricezione numero file
         //Shared_Memory
+        
         int size = sizeof(t_message)*numFile;
         shMemId = alloc_shared_memory(key, size);
         shms = (int *) get_shared_memory(shMemId, 0);
         *shms = numFile;
-        semop(sem_msgShMem, &sem_v, 1);
+        semOp(sem_msgShMem, 0, 1);
         shMem = (t_message *)shms;
         newMsg = 0;
         msgReciv = 0;
@@ -106,12 +107,14 @@ int main(int argc, char * argv[]) {
             if(read(fifo1, &msg, sizeof(msg)) > 0){
                 newMsg = 1;
                 num = 1;
+                semOp(sem_limits, 0, 1);
                 strcpy(channel, "FIFO1");
             }
             //FIFO2
             else if(read(fifo2, &msg, sizeof(msg)) > 0){
                 newMsg = 1;
                 num = 2;
+                semOp(sem_limits, 1, 1);
                 strcpy(channel, "FIFO2");
             }
             //SharedMemory
@@ -120,13 +123,15 @@ int main(int argc, char * argv[]) {
                 newMsg = 1;
                 num = 3;
                 strcpy(channel, "ShdMem");
-                semop(sem_msgShMem, &sem_p, 1);
+                semOp(sem_limits, 2, 1);
+                semOp(sem_msgShMem, 0, -1);
             }
             //MessageQueue
             else if(msgrcv(msQueId, &msgQue, sizeof(t_message), 1, IPC_NOWAIT) != -1){
                 msg = msgQue.msg;
                 newMsg = 1;
                 num = 4;
+                semOp(sem_limits, 3, 1);
                 strcpy(channel, "MsgQueue");
             }
             //Creazione header

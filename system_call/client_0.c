@@ -18,6 +18,7 @@
 #include "err_exit.h"
 #include "shared_memory.h"
 #include "fifo.h"
+#include "semaphore.h"
 #include <sys/msg.h>
 
 char *searchPath;
@@ -44,6 +45,17 @@ size_t append2Path(char *directory) {
     return lastPathEnd;
 }
 
+int checkFileSize(char *pathname, off_t size) {
+    if (pathname == NULL)
+        return 0;
+
+    struct stat statbuf;
+    if (stat(pathname, &statbuf) == -1)
+        return 0;
+
+    return statbuf.st_size >= size;
+}
+
 void search() {
     // open the current searchPath
     DIR *dirp = opendir(searchPath);
@@ -66,7 +78,9 @@ void search() {
             // exetend current searchPath with the file name
             size_t lastPath = append2Path(dentry->d_name);
 
-            if (strncmp(dentry->d_name, searchPrefix, strlen(searchPrefix)) == 0) {
+            if (strncmp(dentry->d_name, searchPrefix, strlen(searchPrefix)) == 0
+                && !checkFileSize(searchPath, 4096))
+            {
                 paths[pathsNum] = (char *)(malloc(strlen(searchPath)));
                 strcpy(paths[pathsNum++], searchPath);
             }
@@ -103,6 +117,7 @@ int main(int argc, char * argv[]) {
         printf("Error\n");
 
     // pause();
+
     if (argc != 2) {
         printf("Error with parameters.\n");
         return 1;
@@ -114,7 +129,7 @@ int main(int argc, char * argv[]) {
 
         searchPath = argv[1];
         char * username = getenv("USER");
-        chdir(searchPath);    // TODO: errori
+        chdir(searchPath);
         printf("Ciao %s, ora inizio l'invio dei contenuti in %s\n", username, searchPath);
 
         search();
@@ -129,16 +144,14 @@ int main(int argc, char * argv[]) {
         sprintf(c, "%d", pathsNum);
 
         write(fifo1, c, strlen(c));
-
-        struct sembuf sem_p = {0, -1, 0};
-        struct sembuf sem_v = {0, 1, 0};
-        struct sembuf sem_wait_zero = {0, 0, 0};
         
         key_t key = ftok(cwd, 1);
+        key_t key_limits = ftok(cwd, 2);
 
         int sem_id = semget(IPC_PRIVATE, 1, IPC_CREAT | S_IRUSR | S_IWUSR);
         int sem_msgShMem = semget(key, 1, IPC_CREAT | S_IRUSR | S_IWUSR);
         int mutex_ShMem = semget(IPC_PRIVATE, 1, IPC_CREAT | S_IRUSR | S_IWUSR);
+        int sem_limits = semget(key_limits, 4, IPC_CREAT | S_IRUSR | S_IWUSR);
 
         union semun args;
         args.val = pathsNum;
@@ -150,13 +163,17 @@ int main(int argc, char * argv[]) {
         args.val = 1;
         semctl(mutex_ShMem, 0, SETVAL, 1);
 
+        unsigned short values[] = {50, 50, 50, 50};
+        args.array = values;
+        semctl(sem_limits, 0, SETALL, values);
+
         t_messageQue msgQue;
         msQueId = msgget(key, IPC_CREAT | S_IRUSR | S_IWUSR);
 
         int shmid = alloc_shared_memory(key, sizeof(t_message) * pathsNum);
         int *shms = (int *) get_shared_memory(shmid, 0);
 
-        semop(sem_msgShMem, &sem_p, 1);
+        semOp(sem_msgShMem, 0, -1);
         
         if (*shms != pathsNum) {
             printf("Error with shmem confirmation %d %d\n", *shms, pathsNum);
@@ -168,9 +185,6 @@ int main(int argc, char * argv[]) {
         int shmem_counter_id = alloc_shared_memory(IPC_PRIVATE, sizeof(int));
         int *shmem_counter = (int *) get_shared_memory(shmem_counter_id, 0);
 
-        /*if (shms == (void *)-1)
-            printf("first shmat failed\n");*/
-
         for (int i = 0; i < pathsNum; i++) {
             int pid = fork();
             if (pid == 0) {
@@ -178,11 +192,6 @@ int main(int argc, char * argv[]) {
 
                 int fd = open(paths[i], O_RDONLY);
                 off_t end_offset = lseek(fd, 0, SEEK_END);
-
-                if (end_offset >= 4096) {
-                    printf("file size larger than 4KB\n");
-                    exit(0);
-                }
 
                 int position = 0;
                 int window_size;
@@ -200,27 +209,35 @@ int main(int argc, char * argv[]) {
                     messages[4 - j].chunk[num_read] = '\0';
                 }
 
-                semop(sem_id, &sem_p, 1);
-                semop(sem_id, &sem_wait_zero, 1);
+                semOp(sem_id, 0, -1);
+                semOp(sem_id, 0, 0);
 
                 msgQue.mtype = 1;
                 msgQue.msg = messages[3];
 
+                semOp(sem_limits, 0, -1);
                 write(fifo1, &messages[0], sizeof(t_message));
+                semOp(sem_limits, 1, -1);
                 write(fifo2, &messages[1], sizeof(t_message));
 
-                //memcpy(shmem, &messages[2], sizeof(t_message));
-                semop(mutex_ShMem, &sem_p, 1);
+                semOp(sem_limits, 2, -1);
+                semOp(mutex_ShMem, 0, -1);
                 *(shmem + (*shmem_counter)++) = messages[2];
-                semop(sem_msgShMem, &sem_v, 1);
-                semop(mutex_ShMem, &sem_v, 1);
+                semOp(sem_msgShMem, 0, 1);
+                semOp(mutex_ShMem, 0, 1);
 
+                semOp(sem_limits, 3, -1);
                 msgsnd(msQueId, &msgQue, sizeof(t_message), 0);
 
                 exit(0);
             }
         }
         while (wait(NULL) != -1);
+
+        t_messageEnd endMsg;
+        msgrcv(msQueId, &endMsg, sizeof(t_messageEnd), 200, 0);
+        if (endMsg.mtype != 200)
+            printf("Error at confirmation\n");
 
         //invio conferma ricezione
         shmdt(shms);
