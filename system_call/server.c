@@ -76,18 +76,19 @@ int main(int argc, char * argv[]) {
     struct sembuf sem_v = {0, 1, 0};
     int newMsg, msgReciv = 0;
     t_message *shMem;
-    t_message msg, empty = {-1};
+    t_message msg;
     t_messageQue msgQue;
     //Variabili scrittura dati
     int fileOpen, num;
     char header[PATH_MAX], channel[9];
 
-    printf("sem: %d\n", semctl(sem_msgShMem, 0, GETVAL));
     while (1){
+        create_fifo("/tmp/fifo_1");
+        printf("\nInizio ricezione...\n\n");
         //Ricezione numero file
+        fifo1 = open_fifo("/tmp/fifo_1", O_RDONLY);
         read(fifo1, buffer_numFile, 3);
         numFile = atoi(buffer_numFile);
-        printf("Numero di file = %d\n", numFile);
         fifo1 = open_fifo("/tmp/fifo_1", O_RDONLY | O_NONBLOCK);
         //Invio conferma ricezione numero file
         //Shared_Memory
@@ -97,8 +98,8 @@ int main(int argc, char * argv[]) {
         *shms = numFile;
         semop(sem_msgShMem, &sem_v, 1);
         shMem = (t_message *)shms;
-        //shMem = (t_message *)get_shared_memory(shMemId, 0);
         newMsg = 0;
+        msgReciv = 0;
         //Ricezione dati
         while (msgReciv < numFile*4){
             //FIFO1
@@ -141,18 +142,16 @@ int main(int argc, char * argv[]) {
 
                 msgReciv ++;
                 newMsg = 0;
-                printf("\nchannel= %s; mess_ricevuti = %d\n", channel, msgReciv);
+                printf("\nChannel: %s; Num_message: %d\n", channel, msgReciv);
             }
         }
-
-
-
         //Invio segnale terminazione
-        printf("Inviato segnale sulla message_queue di terminazione\n");
-        printf("Waiting for Ctrl-C to end...\n");
         t_messageEnd endMsg = {200};
         msgsnd(msQueId, &endMsg, sizeof(t_messageEnd), 0);
-        pause();
+        printf("Inviato segnale sulla message_queue di terminazione\n");
+        unlink("/tmp/fifo_1");
+        remove_shared_memory(shMemId);
+        printf("Waiting for Ctrl-C to end or new file to recive...\n");
     }
     
     return 0;
