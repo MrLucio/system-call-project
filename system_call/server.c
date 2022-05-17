@@ -50,6 +50,7 @@ void writeFile(t_message msg[MAX_PART+1]){
     char header[PATH_MAX], path[PATH_MAX+4];
     strcpy(path, msg[1].path);
     strcat(path, "_out");
+    //printf("path: %s\n", msg[1].path);
     int fileOpen = open(path, O_WRONLY | O_CREAT, 0666);
     for (int i = 1; i < MAX_PART+1; i++){
         sprintf(header, "[Parte %d del file \"%s\", spedita dal processo %d tramite %s]\n", i, msg[i].path, msg[i].pid, channel[i-1]);
@@ -151,6 +152,7 @@ int main(int argc, char * argv[]) {
                 numMsgRcv ++;
                 printf("\nChannel: FIFO1; Num_msg: %d\n", numMsgRcv);
                 addMsg(msg, 1, msgRcv, numMsgRcv/4);
+                printf("(path: %s)\n", msg.path);
             }
             //FIFO2
             if(read(fifo2, &msg, sizeof(msg)) > 0){
@@ -159,6 +161,7 @@ int main(int argc, char * argv[]) {
                 numMsgRcv ++;
                 printf("\nChannel: FIFO2; Num_msg: %d\n", numMsgRcv);
                 addMsg(msg, 2, msgRcv, numMsgRcv/4);
+                printf("(path: %s)\n", msg.path);
             }
             //SharedMemory
             if (semctl(sem_msgShMem, 0, GETVAL) > 0){
@@ -169,6 +172,7 @@ int main(int argc, char * argv[]) {
                 numMsgRcv ++;
                 printf("\nChannel: ShdMem; Num_msg: %d\n", numMsgRcv);
                 addMsg(msg, 3, msgRcv, numMsgRcv/4);
+                printf("(path: %s)\n", msg.path);
             }
             //MessageQueue
             if(msgrcv(msQueId, &msgQue, sizeof(t_message), 1, IPC_NOWAIT) != -1){
@@ -178,12 +182,15 @@ int main(int argc, char * argv[]) {
                 numMsgRcv ++;
                 printf("\nChannel: MsgQueue; Num_msg: %d\n", numMsgRcv);
                 addMsg(msg, 4, msgRcv, numMsgRcv/4);
+                printf("(path: %s)\n", msg.path);
             }
         }
         for (int i = 0; i < numFile; i++){
             /*for (int j = 1; j < MAX_PART+1; j++){
-                printf("pid: %d; path: %s; chunk:%s; part: %d\n", msgRcv[i][j].pid, msgRcv[i][j].path, msgRcv[i][j].chunk, j);
+                //printf("pid: %d; path: %s; chunk:%s; part: %d\n", msgRcv[i][j].pid, msgRcv[i][j].path, msgRcv[i][j].chunk, j);
+                //printf("(path: %s)\n", msgRcv[i][j].path);
             }*/
+            //printf("(%d)pid: %d\n",i+1, msgRcv[i][0].pid);
             writeFile(msgRcv[i]);
         }
         
