@@ -4,6 +4,7 @@
 
 #define PATH_MAX_ELAB 1024
 #define CHUNK_MAX_ELAB 1024
+#define MAX_PART 4
 #pragma once
 #include <linux/limits.h>
 

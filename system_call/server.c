@@ -45,17 +45,47 @@ void signalHandler(int sig) {
     exit(0);
 }
 
-void writeFile(int num, t_message msg, char channel[]){
-    char header[PATH_MAX];
-    sprintf(header, "[Parte %d del file \"%s\", spedita dal processo %d tramite %s]\n", num, msg.path, msg.pid, channel);
-    //Scrittura su file
-    strcat(msg.path, "_out");
-    int fileOpen = open(msg.path, O_WRONLY | O_CREAT | O_APPEND, 0666);
-    write(fileOpen, header, strlen(header));
-    write(fileOpen, msg.chunk, strlen(msg.chunk));
-    write(fileOpen, "\n", sizeof(char));
+void writeFile(t_message msg[MAX_PART+1]){
+    char channel[4][9] = {"FIFO1", "FIFO2", "ShdMem", "MsgQueue"};
+    char header[PATH_MAX], path[PATH_MAX+4];
+    strcpy(path, msg[1].path);
+    strcat(path, "_out");
+    int fileOpen = open(path, O_WRONLY | O_CREAT, 0666);
+    for (int i = 1; i < MAX_PART+1; i++){
+        sprintf(header, "[Parte %d del file \"%s\", spedita dal processo %d tramite %s]\n", i, msg[i].path, msg[i].pid, channel[i-1]);
+        write(fileOpen, header, strlen(header));
+        write(fileOpen, msg[i].chunk, strlen(msg[i].chunk));
+        write(fileOpen, "\n", sizeof(char));
+    }
     close(fileOpen);
+}
 
+void initMsgRcv(t_message msgRcv[][MAX_PART+1]){
+    for (int i = 0; i < numFile; i++){
+        msgRcv[i][0].pid = -1;
+    }
+}
+
+void addMsg(t_message msg, int num, t_message msgRcv[][MAX_PART+1], int numMsgRcv){
+    int find = 0;
+    for (int i = 0; i < numFile; i++){
+        if(msgRcv[i][0].pid == msg.pid){
+            msgRcv[i][num] = msg;
+            find = 1;
+            break;
+        }
+    }
+    if(!find){
+        for (int i = 0; i < numFile; i++){
+            if (msgRcv[i][0].pid == -1){
+                msgRcv[i][0].pid = msg.pid;
+                msgRcv[i][num] = msg;
+                break;
+            }
+            
+        }
+        
+    }
 }
 
 int main(int argc, char * argv[]) {
@@ -87,7 +117,7 @@ int main(int argc, char * argv[]) {
     int sem_msgShMem = semget(key, 1, IPC_CREAT | S_IRUSR | S_IWUSR);
     int sem_limits = semget(key_limits, 4, IPC_CREAT | S_IRUSR | S_IWUSR);
     semctl(sem_msgShMem, 0, SETVAL, args);
-    int msgReciv;
+    int numMsgRcv;
     t_message *shMem;
     t_message msg;
     t_messageQue msgQue;
@@ -102,48 +132,61 @@ int main(int argc, char * argv[]) {
         fifo1 = open_fifo("/tmp/fifo_1", O_RDONLY | O_NONBLOCK);
         //Invio conferma ricezione numero file
         //Shared_Memory
-        
         int size = sizeof(t_message)*numFile;
         shMemId = alloc_shared_memory(key, size);
         shms = (int *) get_shared_memory(shMemId, 0);
         *shms = numFile;
         semOp(sem_msgShMem, 0, 1);
+
+        t_message msgRcv[numFile][MAX_PART+1];
+        initMsgRcv(msgRcv);
         shMem = (t_message *)shms;
-        msgReciv = 0;
+        numMsgRcv = 0;
         //Ricezione dati
-        while (msgReciv < numFile*4){
+        while (numMsgRcv < numFile*4){
             //FIFO1
             if(read(fifo1, &msg, sizeof(msg)) > 0){
-                writeFile(1, msg, "FIFO1");
+                //writeFile(1, msg, "FIFO1");
                 semOp(sem_limits, 0, 1);
-                msgReciv ++;
-                printf("\nChannel: FIFO1; Num_msg: %d\n", msgReciv);
+                numMsgRcv ++;
+                printf("\nChannel: FIFO1; Num_msg: %d\n", numMsgRcv);
+                addMsg(msg, 1, msgRcv, numMsgRcv/4);
             }
             //FIFO2
             if(read(fifo2, &msg, sizeof(msg)) > 0){
-                writeFile(2, msg, "FIFO2");
+                //writeFile(2, msg, "FIFO2");
                 semOp(sem_limits, 1, 1);
-                msgReciv ++;
-                printf("\nChannel: FIFO2; Num_msg: %d\n", msgReciv);
+                numMsgRcv ++;
+                printf("\nChannel: FIFO2; Num_msg: %d\n", numMsgRcv);
+                addMsg(msg, 2, msgRcv, numMsgRcv/4);
             }
             //SharedMemory
             if (semctl(sem_msgShMem, 0, GETVAL) > 0){
                 msg = *shMem++;
-                writeFile(3, msg, "ShdMem");
+                //writeFile(3, msg, "ShdMem");
                 semOp(sem_limits, 2, 1);
                 semOp(sem_msgShMem, 0, -1);
-                msgReciv ++;
-                printf("\nChannel: ShdMem; Num_msg: %d\n", msgReciv);
+                numMsgRcv ++;
+                printf("\nChannel: ShdMem; Num_msg: %d\n", numMsgRcv);
+                addMsg(msg, 3, msgRcv, numMsgRcv/4);
             }
             //MessageQueue
             if(msgrcv(msQueId, &msgQue, sizeof(t_message), 1, IPC_NOWAIT) != -1){
                 msg = msgQue.msg;
-                writeFile(4, msg, "MsgQueue");
+                //writeFile(4, msg, "MsgQueue");
                 semOp(sem_limits, 3, 1);
-                msgReciv ++;
-                printf("\nChannel: MsgQueue; Num_msg: %d\n", msgReciv);
+                numMsgRcv ++;
+                printf("\nChannel: MsgQueue; Num_msg: %d\n", numMsgRcv);
+                addMsg(msg, 4, msgRcv, numMsgRcv/4);
             }
         }
+        for (int i = 0; i < numFile; i++){
+            /*for (int j = 1; j < MAX_PART+1; j++){
+                printf("pid: %d; path: %s; chunk:%s; part: %d\n", msgRcv[i][j].pid, msgRcv[i][j].path, msgRcv[i][j].chunk, j);
+            }*/
+            writeFile(msgRcv[i]);
+        }
+        
         //Invio segnale terminazione
         t_messageEnd endMsg = {200};
         msgsnd(msQueId, &endMsg, sizeof(t_messageEnd), 0);
