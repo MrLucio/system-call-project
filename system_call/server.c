@@ -50,10 +50,10 @@ void writeFile(t_message msg[MAX_PART]){
     char header[PATH_MAX], path[PATH_MAX+4];
     strcpy(path, msg[1].path);
     strcat(path, "_out");
-    //printf("path: %s\n", msg[1].path);
+    //printf("path: %s\n", msg[1].path)
     int fileOpen = open(path, O_WRONLY | O_CREAT, 0666);
     for (int i = 0; i < MAX_PART; i++){
-        sprintf(header, "[Parte %d del file \"%s\", spedita dal processo %d tramite %s]\n", i + 1, msg[i].path, msg[i].pid, channel[i-1]);
+        sprintf(header, "[Parte %d del file \"%s\", spedita dal processo %d tramite %s]\n", i + 1, msg[i].path, msg[i].pid, channel[i]);
         write(fileOpen, header, strlen(header));
         write(fileOpen, msg[i].chunk, strlen(msg[i].chunk));
         write(fileOpen, "\n", sizeof(char));
