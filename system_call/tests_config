@@ -5,13 +5,23 @@ TEST="ndoKvQOfUI2zZvT9IlIqJd2kkLFP3WWzqiEyB1oIE5WW75C531WlOw3LB8Tj3ZuiQzU6xCwETR
 if [[ "$*" == *"gen_more"* ]]
   then
     for i in {6..1000..1}; do
-      echo -n $TEST > ./tests/sendme_"$i"
+      if [ -f ./tests/sendme_"$i" ]
+        then
+          echo Il file ./tests/sendme_"$i" già esiste
+      else
+        echo -n $TEST > ./tests/sendme_"$i"
+      fi
     done
   echo "Tanti test creati"
 elif [[ "$*" == *"gen"* ]]
   then
     for i in {6..100..1}; do
-      echo -n $TEST > ./tests/sendme_"$i"
+      if [ -f ./tests/sendme_"$i" ]
+        then
+          echo Il file ./tests/sendme_"$i" già esiste
+      else
+        echo -n $TEST > ./tests/sendme_"$i"
+      fi
     done
   echo "Test creati"
 fi
