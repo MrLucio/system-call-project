@@ -68,6 +68,7 @@ void search() {
     // iter. until NULL is returned as a result
     struct dirent *dentry;
     while ( (dentry = readdir(dirp)) != NULL) {
+        if (pathsNum == 100) return;
         // Skip . and ..
         if (strcmp(dentry->d_name, ".") == 0 ||
             strcmp(dentry->d_name, "..") == 0)
