@@ -25,7 +25,7 @@ char *searchPath;
 char *searchPrefix = "sendme_";
 int pathsNum = 0;
 char *paths[100];
-int msQueId;
+int msQueueId;
 
 #ifndef SEMUN_H
 #define SEMUN_H
@@ -168,8 +168,8 @@ int main(int argc, char * argv[]) {
         args.array = values;
         semctl(sem_limits, 0, SETALL, values);
 
-        t_messageQue msgQue;
-        msQueId = msgget(key, IPC_CREAT | S_IRUSR | S_IWUSR);
+        t_messageQue msgQueue;
+        msQueueId = msgget(key, IPC_CREAT | S_IRUSR | S_IWUSR);
 
         int shmid = alloc_shared_memory(key, sizeof(t_message) * pathsNum);
         int *shms = (int *) get_shared_memory(shmid, 0);
@@ -213,22 +213,24 @@ int main(int argc, char * argv[]) {
                 semOp(sem_id, 0, -1);
                 semOp(sem_id, 0, 0);
 
-                msgQue.mtype = 1;
-                msgQue.msg = messages[3];
+                msgQueue.mtype = 1;
+                msgQueue.msg = messages[3];
 
                 semOp(sem_limits, 0, -1);
                 write(fifo1, &messages[0], sizeof(t_message));
+
                 semOp(sem_limits, 1, -1);
                 write(fifo2, &messages[1], sizeof(t_message));
 
                 semOp(sem_limits, 2, -1);
+                msgsnd(msQueueId, &msgQueue, sizeof(t_message), 0);
+
+                semOp(sem_limits, 3, -1);
                 semOp(mutex_ShMem, 0, -1);
                 *(shmem + (*shmem_counter)++) = messages[2];
                 semOp(sem_msgShMem, 0, 1);
                 semOp(mutex_ShMem, 0, 1);
 
-                semOp(sem_limits, 3, -1);
-                msgsnd(msQueId, &msgQue, sizeof(t_message), 0);
 
                 exit(0);
             }
@@ -236,7 +238,7 @@ int main(int argc, char * argv[]) {
         while (wait(NULL) != -1);
 
         t_messageEnd endMsg;
-        msgrcv(msQueId, &endMsg, sizeof(t_messageEnd), 200, 0);
+        msgrcv(msQueueId, &endMsg, sizeof(t_messageEnd), 200, 0);
         if (endMsg.mtype != 200)
             printf("Error at confirmation\n");
 

@@ -2,11 +2,13 @@
 /// @brief Contiene la definizioni di variabili
 ///         e funzioni specifiche del progetto.
 
+#pragma once
+
+#include <linux/limits.h>
+
 #define PATH_MAX_ELAB 150
 #define CHUNK_MAX_ELAB 1025
 #define MAX_PART 4
-#pragma once
-#include <linux/limits.h>
 
 typedef struct message{
     int pid;

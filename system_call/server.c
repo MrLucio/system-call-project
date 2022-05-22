@@ -34,7 +34,7 @@ union semun {
 int fifo1;
 int fifo2;
 int shMemId;
-int msQueId;
+int msQueueId;
 int numFile;
 
 void signalHandler(int sig) {
@@ -42,13 +42,13 @@ void signalHandler(int sig) {
     close(fifo1);
     close(fifo2);
     remove_shared_memory(shMemId);
-    msgctl(msQueId, IPC_RMID, NULL);
+    msgctl(msQueueId, IPC_RMID, NULL);
     exit(0);
 }
 
 void writeFile(t_message msgRcv[][MAX_PART]){
     int fileOpen;
-    char channel[4][9] = {"FIFO1", "FIFO2", "MsgQueue", "ShdMem"};
+    char *channel[] = {"FIFO1", "FIFO2", "MsgQueue", "ShdMem"};
     char header[PATH_MAX], path[PATH_MAX+4];
     for (int i = 0; i < numFile; i++){
         strcpy(path, msgRcv[i][0].path);
@@ -71,11 +71,9 @@ void initMsgRcv(t_message msgRcv[][MAX_PART]){
 }
 
 void addMsg(t_message msg, int num, t_message msgRcv[][MAX_PART], int numMsgRcv){
-    //int find = 0;
     for (int i = 0; i < numFile; i++){
         if(msgRcv[i][0].pid == msg.pid){
             msgRcv[i][num] = msg;
-            //find = 1;
             break;
         }else if (msgRcv[i][0].pid == -1){
                 msgRcv[i][0].pid = msg.pid;
@@ -83,17 +81,6 @@ void addMsg(t_message msg, int num, t_message msgRcv[][MAX_PART], int numMsgRcv)
                 break;
             }
     }
-    /*if(!find){
-        for (int i = 0; i < numFile; i++){
-            if (msgRcv[i][0].pid == -1){
-                msgRcv[i][0].pid = msg.pid;
-                msgRcv[i][num] = msg;
-                break;
-            }
-            
-        }
-        
-    }*/
 }
 
 int main(int argc, char * argv[]) {
@@ -112,7 +99,7 @@ int main(int argc, char * argv[]) {
     //Message_Queue
     key_t key = ftok(cwd, 1);
     key_t key_limits = ftok(cwd, 2);
-    msQueId = msgget(key, IPC_CREAT | S_IRUSR | S_IWUSR);
+    msQueueId = msgget(key, IPC_CREAT | S_IRUSR | S_IWUSR);
 
 
     //Variabili ricezione numero file
@@ -126,7 +113,7 @@ int main(int argc, char * argv[]) {
     int numMsgRcv;
     t_message *shMem;
     t_message msg;
-    t_messageQue msgQue;
+    t_messageQue msgQueue;
     //Variabili cronometro
     struct timeval t1, t2;
 
@@ -165,14 +152,6 @@ int main(int argc, char * argv[]) {
                 printf("\nChannel: FIFO2; Num_msg: %d\n", numMsgRcv);
                 addMsg(msg, 1, msgRcv, numMsgRcv/4);
             }
-            //MessageQueue
-            if(msgrcv(msQueId, &msgQue, sizeof(t_message), 1, IPC_NOWAIT) != -1){
-                msg = msgQue.msg;
-                semOp(sem_limits, 3, 1);
-                numMsgRcv ++;
-                printf("\nChannel: MsgQueue; Num_msg: %d\n", numMsgRcv);
-                addMsg(msg, 2, msgRcv, numMsgRcv/4);
-            }
             //SharedMemory
             if (semctl(sem_msgShMem, 0, GETVAL) > 0){
                 msg = *shMem++;
@@ -180,6 +159,14 @@ int main(int argc, char * argv[]) {
                 semOp(sem_msgShMem, 0, -1);
                 numMsgRcv ++;
                 printf("\nChannel: ShdMem; Num_msg: %d\n", numMsgRcv);
+                addMsg(msg, 2, msgRcv, numMsgRcv/4);
+            }
+            //MessageQueue
+            if(msgrcv(msQueueId, &msgQueue, sizeof(t_message), 1, IPC_NOWAIT) != -1){
+                msg = msgQueue.msg;
+                semOp(sem_limits, 3, 1);
+                numMsgRcv ++;
+                printf("\nChannel: MsgQueue; Num_msg: %d\n", numMsgRcv);
                 addMsg(msg, 3, msgRcv, numMsgRcv/4);
             }
         
@@ -187,7 +174,7 @@ int main(int argc, char * argv[]) {
         gettimeofday(&t2, NULL);
         //Invio segnale terminazione
         t_messageEnd endMsg = {200};
-        msgsnd(msQueId, &endMsg, sizeof(t_messageEnd), 0);
+        msgsnd(msQueueId, &endMsg, sizeof(t_messageEnd), 0);
         unlink("/tmp/fifo_1");
         remove_shared_memory(shMemId);
         printf("\nLa ricezione ha impiegato %.0f ms\n", ((t2.tv_sec - t1.tv_sec) * 1000.0) + ((t2.tv_usec - t1.tv_usec) / 1000.0));
