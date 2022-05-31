@@ -13,16 +13,19 @@
 char *fname = "/tmp/myfifo";
 
 void create_fifo(char *path){
-    //if(mkfifo(fname, S_IRUSR|S_IWUSR) == -1) ErrExit("make_fifo");
-    mkfifo(path, S_IRUSR|S_IWUSR);
+    int fifo = mkfifo(path, S_IRUSR | S_IWUSR);
+    if (fifo == -1)
+        ErrExit("mkfifo failed");
 }
 
 int open_fifo(char *path, int flag){
     int fifo = open(path, flag);
-    if (fifo == -1) ErrExit("open_fifo");
+    if (fifo == -1)
+        ErrExit("open failed");
     return fifo;
 }
 
 void read_fifo(int fifo, void *buffer, size_t size){
-    if (read(fifo, buffer, size) == -1) ErrExit("read_fifo");
+    if (read(fifo, buffer, size) == -1)
+        ErrExit("read failed");
 }
