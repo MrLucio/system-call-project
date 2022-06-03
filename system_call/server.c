@@ -55,13 +55,32 @@ void signalHandler(int sig) {
     exit(0);
 }
 
+void pathOutConcat(char *path, char *retBuf){
+    int find = 0;
+    char strAppend[4] = "_out";
+    for (int i = strlen(path), j = i+4; i >= 0; i--,j--){
+        retBuf[j] = path[i];
+        if (path[i] == '.' && !find){
+            find = 1;
+            for (int k = 3; k >= 0; k--){
+                j--;
+                retBuf[j] = strAppend[k];
+            }
+        }
+    }
+    if (!find){
+        strcpy(retBuf, path);
+        strcat(retBuf, strAppend);
+    }
+    
+}
+
 void write_files(message_t msgRcv[][MAX_PART]){
     int fileOpen;
     char *channel[] = {"FIFO1", "FIFO2", "MsgQueue", "ShdMem"};
     char header[PATH_MAX], path[PATH_MAX+4];
     for (int i = 0; i < numFile; i++){
-        strcpy(path, msgRcv[i][0].path);
-        strcat(path, "_out");
+        pathOutConcat(msgRcv[i][0].path, path);
         fileOpen = open(path, O_WRONLY | O_CREAT, 0666);
         for (int j = 0; j < MAX_PART; j++){
             sprintf(header, "[Parte %d del file \"%s\", spedita dal processo %d tramite %s]\n", j + 1, msgRcv[i][j].path, msgRcv[i][j].pid, channel[j]);
@@ -79,7 +98,7 @@ void initMsgRcv(message_t msgRcv[][MAX_PART]){
     }
 }
 
-void addMsg(message_t msg, int num, message_t msgRcv[][MAX_PART], int numMsgRcv){
+void addMsg(message_t msg, int num, message_t msgRcv[][MAX_PART]){
     for (int i = 0; i < numFile; i++){
         if(msgRcv[i][0].pid == msg.pid){
             msgRcv[i][num] = msg;
@@ -183,14 +202,14 @@ int main(int argc, char * argv[]) {
                 semOp(sem_limits, FIFO1, 1);
                 numMsgRcv++;
                 printf("\nChannel: FIFO1; Num_msg: %d\n", numMsgRcv);
-                addMsg(msg, FIFO1, msgRcv, numMsgRcv / 4);
+                addMsg(msg, FIFO1, msgRcv);
             }
             //FIFO2
             if(read(fifo2, &msg, sizeof(message_t)) > 0){
                 semOp(sem_limits, FIFO2, 1);
                 numMsgRcv++;
                 printf("\nChannel: FIFO2; Num_msg: %d\n", numMsgRcv);
-                addMsg(msg, FIFO2, msgRcv, numMsgRcv / 4);
+                addMsg(msg, FIFO2, msgRcv);
             }
             //SharedMemory
             if (semctl(sem_shmem, 0, GETVAL) > 0){
@@ -203,7 +222,7 @@ int main(int argc, char * argv[]) {
                 semOp(sem_limits, SHMEM, 1);
                 numMsgRcv++;
                 printf("\nChannel: ShdMem; Num_msg: %d\n", numMsgRcv);
-                addMsg(msg, SHMEM, msgRcv, numMsgRcv / 4);
+                addMsg(msg, SHMEM, msgRcv);
             }
             //MessageQueue
             if(msgrcv(msqid, &msgQueue, sizeof(message_t), 1, IPC_NOWAIT) != -1){
@@ -211,7 +230,7 @@ int main(int argc, char * argv[]) {
                 semOp(sem_limits, MSGQUEUE, 1);
                 numMsgRcv++;
                 printf("\nChannel: MsgQueue; Num_msg: %d\n", numMsgRcv);
-                addMsg(msg, MSGQUEUE, msgRcv, numMsgRcv / 4);
+                addMsg(msg, MSGQUEUE, msgRcv);
             }
         
         }
