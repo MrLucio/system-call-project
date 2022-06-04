@@ -1,18 +1,18 @@
 /// @file sender_manager.c
 /// @brief Contiene l'implementazione del sender_manager.
 
-#include <unistd.h>
-#include <fcntl.h>
-#include <stdio.h>
 //#include <stdlib.h>
 //#include <sys/shm.h>
 //#include <sys/ipc.h>
 //#include <sys/stat.h>
 //#include <string.h>
-#include <signal.h>
 //#include <linux/limits.h>
-#include <sys/msg.h>
 //#include <sys/sem.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <signal.h>
+#include <sys/msg.h>
 #include "err_exit.h"
 #include "defines.h"
 #include "message_queue.h"
