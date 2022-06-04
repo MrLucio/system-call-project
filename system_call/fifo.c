@@ -24,8 +24,3 @@ int open_fifo(char *path, int flag){
         ErrExit("open failed");
     return fifo;
 }
-
-void read_fifo(int fifo, void *buffer, size_t size){
-    if (read(fifo, buffer, size) == -1)
-        ErrExit("read failed");
-}

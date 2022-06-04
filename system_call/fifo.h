@@ -7,4 +7,3 @@
 
 void create_fifo(char *path);
 int open_fifo(char *path, int flag);
-void read_fifo(int fifo, void *buffer, size_t size);
