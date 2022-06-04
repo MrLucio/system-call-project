@@ -3,6 +3,7 @@
 ///         specifiche del progetto.
 
 #include "defines.h"
+#include "err_exit.h"
 
 size_t append2Path(char *directory, char *searchPath) {
     size_t lastPathEnd = strlen(searchPath);

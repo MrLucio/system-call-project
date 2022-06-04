@@ -24,11 +24,6 @@ typedef struct message{
     char chunk[CHUNK_MAX_ELAB];
 } message_t;
 
-typedef struct messageQueue{
-    long mtype;
-    message_t msg;
-} messageQueue_t;
-
 typedef struct messageEnd{
     long mtype;
 } messageEnd_t;
