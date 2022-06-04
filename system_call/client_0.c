@@ -15,6 +15,7 @@
 #include "shared_memory.h"
 #include "fifo.h"
 #include "semaphore.h"
+#include "message_queue.h"
 #include <sys/msg.h>
 
 char *searchPath;
