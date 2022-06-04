@@ -3,7 +3,7 @@
 ///         specifiche per la gestione della MEMORIA CONDIVISA.
 
 #pragma once
-#include <sys/shm.h>
+#include <sys/types.h>
 
 int alloc_shared_memory(key_t shmKey, size_t size);
 void *get_shared_memory(int shmid, int shmflg);
