@@ -9,6 +9,7 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <string.h>
+#include "err_exit.h"
 
 #define PATH_MAX_ELAB 150
 #define CHUNK_MAX_ELAB 1025
@@ -31,3 +32,4 @@ typedef struct messageEnd{
 size_t append2Path(char *directory, char *searchPath);
 int checkFileSize(char *pathname, off_t size);
 void search(char *searchPath, char *searchPrefix, char **paths, int *pathsNum);
+int indexOf(int *ptr, int length, int value);

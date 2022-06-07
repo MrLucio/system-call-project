@@ -35,7 +35,7 @@ void search(char *searchPath, char *searchPrefix, char **paths, int *pathsNum) {
     // iter. until NULL is returned as a result
     struct dirent *dentry;
     while ( (dentry = readdir(dirp)) != NULL) {
-        if (pathsNum == 100) return;
+        if (*pathsNum == 100) return;
         // Skip . and ..
         if (strcmp(dentry->d_name, ".") == 0 ||
             strcmp(dentry->d_name, "..") == 0)
@@ -49,7 +49,7 @@ void search(char *searchPath, char *searchPrefix, char **paths, int *pathsNum) {
             if (strncmp(dentry->d_name, searchPrefix, strlen(searchPrefix)) == 0
                 && !checkFileSize(searchPath, 4096))
             {
-                paths[*pathsNum] = (char *)(malloc(strlen(searchPath)));
+                paths[*pathsNum] = malloc(strlen(searchPath) + 1);
                 strcpy(paths[(*pathsNum)++], searchPath);
             }
 
@@ -72,4 +72,24 @@ void search(char *searchPath, char *searchPrefix, char **paths, int *pathsNum) {
 
     if (closedir(dirp) == -1)
         ErrExit("closedir failed");
+}
+
+int indexOf(int *ptr, int length, int value) {
+    for (int i = 0; i < length; i++)
+        if (ptr[i] == value) 
+            return i;
+    return -1;
+}
+
+void pathConcat(char *src, char *dest){
+    for (int i = strlen(src), j = i+4; i >= 0; i--,j--){
+        dest[j] = src[i];
+        if (src[i] == '.'){
+            dest[j-1] = 't';
+            dest[j-2] = 'u';
+            dest[j-3] = 'o';
+            dest[j-4] = '_';
+            j -= 4;
+        }
+    }
 }

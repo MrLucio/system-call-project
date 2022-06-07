@@ -38,19 +38,3 @@ void remove_shared_memory(int shmid) {
         printf("shmem already removed\n");
         //ErrExit("shmctl failed");
 }
-
-int find_free_position(int *ptr_sh, int numFile) {
-    for (int i = 0; i < numFile; i++)
-        if (*(ptr_sh + i) == 1) 
-            return i;
-    printf("Error: free position not found");
-    exit(1);
-}
-
-int find_taken_position(int *ptr_sh, int numFile) {
-    for (int i = 0; i < numFile; i++)
-        if (*(ptr_sh + i) == 0)
-            return i;
-    printf("Error: taken position not found");
-    exit(1);
-}

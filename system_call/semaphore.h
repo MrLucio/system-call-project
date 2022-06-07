@@ -7,6 +7,8 @@
 #ifndef SEMUN_H
 #define SEMUN_H
 #include <sys/sem.h>
+#include <stdio.h>
+
 // definition of the union semun
 union semun {
     int val;
@@ -15,5 +17,5 @@ union semun {
 };
 #endif
 
-void semOp (int semid, unsigned short sem_num, short sem_op);
-void remove_semaphore (int semid);
+void semOp(int semid, unsigned short sem_num, short sem_op);
+void remove_semaphore(int semid);

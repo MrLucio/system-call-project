@@ -17,6 +17,7 @@
 #include "defines.h"
 #include "message_queue.h"
 #include "shared_memory.h"
+#include "message_queue.h"
 #include "semaphore.h"
 #include "fifo.h"
 
@@ -73,24 +74,28 @@ int main(int argc, char * argv[]) {
         ErrExit("semctl failed");
 
 
-    char buffer_numFile[3];     // Buffer for read the total number of file to recive
+    char buffer_numFile[4];     // Buffer for read the total number of file to recive
     int numMsgRcv;              // The number of the message recived
     int taken_position;
     message_t *shMem;           // Pointer to the shared memory to read the message
     message_t msg;              // Will contain the message recived
 
+    // FIFO 1 and FIFO 2 openings
+    create_fifo("/tmp/fifo_2");
+
     while (1){
 
-        // FIFO creation
         create_fifo("/tmp/fifo_1");
-        create_fifo("/tmp/fifo_2");
 
         // FIFO opening
         fifo1 = open_fifo("/tmp/fifo_1", O_RDONLY);
-        fifo2 = open_fifo("/tmp/fifo_2", O_RDONLY);
+        fifo2 = open_fifo("/tmp/fifo_2", O_RDONLY | O_NONBLOCK);
 
         // Reading the number of file from FIFO 1
         memset(buffer_numFile, '\0', 4);
+
+        // Message Queue creation
+        msqid = get_message_queue(key);
 
         if (read(fifo1, buffer_numFile, 3) == -1)
             ErrExit("read number of file failed");
@@ -109,9 +114,6 @@ int main(int argc, char * argv[]) {
         // Support vector initialization
         shmidSupport = alloc_shared_memory(key_vector, sizeof(int) * numFile);
         bufferSupport = (int *) get_shared_memory(shmidSupport, 0);
-
-        // Message Queue creation
-        msqid = get_message_queue(key);
 
         // Sending acknowledge to client
         *bufferMsg = numFile;
@@ -150,11 +152,11 @@ int main(int argc, char * argv[]) {
             //Shared Memory
             if (semctl(sem_shmem, 0, GETVAL) > 0){
                 semOp(mutex_ShMem, 0, -1);
-                taken_position = find_taken_position(bufferSupport, numFile);
+                taken_position = indexOf(bufferSupport, numFile, 0);
                 msg = shMem[taken_position];
                 bufferSupport[taken_position] = 1;
-                semOp(sem_shmem, 0, -1);
                 semOp(mutex_ShMem, 0, 1);
+                semOp(sem_shmem, 0, -1);
                 semOp(sem_limits, SHMEM, 1);
                 numMsgRcv++;
                 printf("\nChannel: ShdMem; Num_msg: %d\n", numMsgRcv);
@@ -169,6 +171,7 @@ int main(int argc, char * argv[]) {
 
         // Closing and deleting FIFO1
         close(fifo1);
+        close(fifo2);
         unlink("/tmp/fifo_1");
 
         // Closing and detaching Shared memory and support vector
@@ -180,12 +183,8 @@ int main(int argc, char * argv[]) {
         // Writing the message recived on file
         write_files(msgRcv);
 
-        //semOp(sem_msgShMem, 0, -1);
-        
-        /*
-        if (msgctl(msqid, IPC_RMID, NULL) == -1)
-            ErrExit("msgctl failed");
-            */
+        // Wait for client to receive ending signal
+        semOp(sem_msgShMem, 0, -1);
 
         printf("\nWaiting for Ctrl-C to end or new file to receive...\n");
     }

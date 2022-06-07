@@ -1,39 +1,138 @@
 #!/bin/bash
 
-if [[ "$*" == *"gen_more"* ]]
-  then
-    for i in {1..1000..1}; do
-      TEST=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 4095)
-      if [ -f ./tests/sendme_"$i" ]
-        then
-          echo Il file ./tests/sendme_"$i" già esiste
-      else
-        echo -n "$TEST" > ./tests/sendme_"$i"
-      fi
-    done
-  echo "Tanti test creati"
-elif [[ "$*" == *"gen"* ]]
-  then
-    for i in {1..10..1}; do
-      TEST=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 4095)
-      if [ -f ./tests/sendme_"$i" ]
-        then
-          echo Il file ./tests/sendme_"$i" già esiste
-      else
-        echo -n "$TEST" > ./tests/sendme_"$i"
-      fi
-    done
-  echo "Test creati"
+BOLD=$(tput bold)
+NORMAL=$(tput sgr0)
+RED=$(tput setaf 1)
+GREEN=$(tput setaf 2)
+
+TICK="[${GREEN}✓${NORMAL}]"
+CROSS="[${RED}✗${NORMAL}]"
+
+RANDOM=$$
+SLEEP=0.05
+
+RANDOM_N=120
+
+if [ ! -d "./tests" ]; then
+  echo "Cartella tests non trovata"
+  exit 1
 fi
 
-if [[ "$*" ==  *"clean"* ]]
-  then
-    rm -f ./tests/*_out
+function gen () {
+  for (( i = 1; i <= $1; i++ )); do
+    R=$((RANDOM % 4092 + 4))
+    TEST=$(tr -dc A-Za-z0-9 </dev/urandom | head -c $R)
+    if [ ! -f ./tests/sendme_"$i".txt ]; then
+      echo -n "$TEST" > ./tests/sendme_"$i".txt
+    fi
+  done
+
+  if [ "$2" != "-s" ]; then
+    echo "$1 Test creati"
+  fi
+}
+
+function clean () {
+  rm -f ./tests/*.txt
+  if [ "$1" != "-s" ]; then
     echo "Test out eliminati"
+  fi
+}
+
+function compile () {
+  #make clean > /dev/null
+  make > /dev/null
+}
+
+function delete () {
+  rm -f ./tests/sendme_{1..2000}.txt
+  if [ "$1" != "-s" ]; then
+    echo "Tutti i test sono stati eliminati"
+  fi
+}
+
+function ctrlc () {
+  printf "\n\n${BOLD}TERMINAZIONE\n${NORMAL}"
+  kill "$1"
+  kill "$2"
+  rm "$3"
+  rm "$4"
+  exit 0
+}
+
+if [[ "$*" == *"gen_more"* ]]; then
+  gen 1000
+elif [[ "$*" == *"gen_random"* ]]; then
+  R=$((RANDOM % 130))
+  gen $R
+elif [[ "$*" == *"gen"* ]]; then
+  gen 10
 fi
 
-if [[ "$*" == *"del"* ]]
+if [[ "$*" == *"run"* ]]; then
+  printf "\nLo script cicla ogni secondo e ricrea ogni volta un numero (preso dalla variabile RANDOM_N) di file sendme all'interno della cartella tests, poi esegue il client utilizzando la cwd dello script come path.\n"
+  printf "\n%sLo script può essere interrotto in qualsiasi momento con Ctrl-c%s\n" "${GREEN}" "${NORMAL}"
+  printf "%s%sATTENZIONE: assicurati che non siano in esecuzione altri server o client, e che esista la cartella tests%s\n" "${BOLD}" "${RED}" "${NORMAL}"
+  read -r -p "Vuoi procedere con i test? [y/N] " response
+  if [[ "$response" =~ ^([yY][eE][sS]|[yY])$ ]]
   then
-    rm -f ./tests/sendme_{1..2000}
-    echo "Tutti i test sono stati eliminati"
+    compile
+
+    N=1
+
+    server_err_log=$(mktemp)
+    client_err_log=$(mktemp)
+
+    echo ""
+
+    ./server 1> /dev/null 2> $server_err_log &
+    PID_SERVER=$!
+
+    sleep 1
+
+    ./client_0 "$PWD" 1> /dev/null 2> $client_err_log &
+    PID_CLIENT=$!
+
+    trap "ctrlc $PID_SERVER $PID_CLIENT $server_err_log $client_err_log" SIGINT
+
+    error=false
+
+    while true; do
+      delete -s
+      clean -s
+      R=$((RANDOM % 20 + 10))
+      gen $R -s
+
+      kill -SIGINT "$PID_CLIENT"
+
+      sleep $SLEEP
+
+      if [ -s "$server_err_log" ]; then
+        error=true
+        server_error_message=`cat $server_err_log`
+      fi
+
+      if [ -s "$client_err_log" ]; then
+        error=true
+        client_error_message=`cat $client_err_log`
+      fi
+
+      if [ "$error" = true ]; then
+        printf "%sTEST %d %s\n\n%sServer exit message:%s\n%s\n%sClient exit message:%s\n%s\n" "${BOLD}" "${N}" "${CROSS}" "${BOLD}" "${NORMAL}" "${server_error_message}" "${BOLD}" "${NORMAL}" "${client_error_message}"
+        exit 1
+      fi
+
+      printf "%sTEST %d %s%s\n" "${BOLD}" "${N}" "${NORMAL}" "${TICK}"
+
+      ((N++))
+    done
+  fi
+fi
+
+if [[ "$*" ==  *"clean"* ]]; then
+  clean
+fi
+
+if [[ "$*" == *"del"* ]]; then
+  delete
 fi
