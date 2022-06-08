@@ -16,6 +16,7 @@ int checkFileSize(char *pathname, off_t size) {
     if (pathname == NULL)
         return 0;
 
+    // Retrieve stats about the desired file
     struct stat statbuf;
     if (stat(pathname, &statbuf) == -1)
         return 0;
@@ -75,21 +76,10 @@ void search(char *searchPath, char *searchPrefix, char **paths, int *pathsNum) {
 }
 
 int indexOf(int *ptr, int length, int value) {
+    // Cycle the given pointer looking for the
+    // first index having a matching value
     for (int i = 0; i < length; i++)
         if (ptr[i] == value) 
             return i;
     return -1;
-}
-
-void pathConcat(char *src, char *dest){
-    for (int i = strlen(src), j = i+4; i >= 0; i--,j--){
-        dest[j] = src[i];
-        if (src[i] == '.'){
-            dest[j-1] = 't';
-            dest[j-2] = 'u';
-            dest[j-3] = 'o';
-            dest[j-4] = '_';
-            j -= 4;
-        }
-    }
 }

@@ -16,8 +16,8 @@
 #define MAX_PART 4
 #define FIFO1 0
 #define FIFO2 1
-#define SHMEM 2
-#define MSGQUEUE 3
+#define MSGQUEUE 2
+#define SHMEM 3
 
 typedef struct message{
     int pid;

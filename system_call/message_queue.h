@@ -13,4 +13,4 @@ typedef struct messageQueue{
 
 void remove_message_queue(int msqid);
 int get_message_queue(key_t key);
-int read_message_queue(int msqid, message_t msg);
+int read_message_queue(int msqid, message_t *msg);

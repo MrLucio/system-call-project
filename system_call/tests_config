@@ -9,7 +9,7 @@ TICK="[${GREEN}✓${NORMAL}]"
 CROSS="[${RED}✗${NORMAL}]"
 
 RANDOM=$$
-SLEEP=0.05
+SLEEP=0.5
 
 RANDOM_N=120
 
@@ -40,7 +40,7 @@ function clean () {
 }
 
 function compile () {
-  #make clean > /dev/null
+  make clean > /dev/null
   make > /dev/null
 }
 
@@ -53,8 +53,8 @@ function delete () {
 
 function ctrlc () {
   printf "\n\n${BOLD}TERMINAZIONE\n${NORMAL}"
-  kill "$1"
-  kill "$2"
+  kill -INT "$1"
+  kill -USR1 "$2"
   rm "$3"
   rm "$4"
   exit 0
@@ -100,7 +100,7 @@ if [[ "$*" == *"run"* ]]; then
     while true; do
       delete -s
       clean -s
-      R=$((RANDOM % 20 + 10))
+      R=$((RANDOM % 120 + 10))
       gen $R -s
 
       kill -SIGINT "$PID_CLIENT"

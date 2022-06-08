@@ -1,5 +1,5 @@
-/// @file sender_manager.c
-/// @brief Contiene l'implementazione del sender_manager.
+/// @file server.c
+/// @brief Contiene l'implementazione del server.
 
 //#include <stdlib.h>
 //#include <sys/shm.h>
@@ -23,14 +23,14 @@
 
 int fifo1;
 int fifo2;
-int sem_msgShMem;
+int sem_ack;
 int sem_limits;
-int mutex_ShMem;
+int mutex_shmem;
 int sem_shmem;
-int shmidMsg;
-int *bufferMsg;
-int shmidSupport;
-int *bufferSupport;
+int shmid;
+int *shmbuf;
+int shmem_vector_id;
+int *shmem_vector;
 int msqid;
 int numFile;
 unsigned short arr_limits[] = {50, 50, 50, 50};
@@ -58,35 +58,32 @@ int main(int argc, char * argv[]) {
     key_t key_mutex = ftok(cwd, 4);
     key_t key_shmem = ftok(cwd, 5);
 
-    // Semaphore creation
-    sem_msgShMem = semget(key, 1, IPC_CREAT | S_IRUSR | S_IWUSR); 
+    // Semaphores creation
+    sem_ack = semget(key, 1, IPC_CREAT | S_IRUSR | S_IWUSR);    // Acknowledge semaphore
     sem_limits = semget(key_limits, 4, IPC_CREAT | S_IRUSR | S_IWUSR); //50 message limit semaphore
-    mutex_ShMem = semget(key_mutex, 1, IPC_CREAT | S_IRUSR | S_IWUSR); //mutex access shared memory semaphore
+    mutex_shmem = semget(key_mutex, 1, IPC_CREAT | S_IRUSR | S_IWUSR); //mutex access shared memory semaphore
     sem_shmem = semget(key_shmem, 1, IPC_CREAT | S_IRUSR | S_IWUSR);
 
-    // Semaphore initialization
+    // Semaphores initialization
     union semun arg;
     arg.array = arr_limits;
-    semctl(sem_msgShMem, 0, SETVAL, 0);
-    semctl(mutex_ShMem, 0, SETVAL, 1);
+    semctl(sem_ack, 0, SETVAL, 0);
+    semctl(mutex_shmem, 0, SETVAL, 1);
     semctl(sem_shmem, 0, SETVAL, 0);
     if (semctl(sem_limits, 0, SETALL, arg) == -1)
         ErrExit("semctl failed");
 
-
     char buffer_numFile[4];     // Buffer for read the total number of file to recive
     int numMsgRcv;              // The number of the message recived
     int taken_position;
-    message_t *shMem;           // Pointer to the shared memory to read the message
+    message_t *shmem;           // Pointer to the shared memory to read the message
     message_t msg;              // Will contain the message recived
 
-    // FIFO 1 and FIFO 2 openings
+    // FIFO 2 creation
+    create_fifo("/tmp/fifo_1");
     create_fifo("/tmp/fifo_2");
 
     while (1){
-
-        create_fifo("/tmp/fifo_1");
-
         // FIFO opening
         fifo1 = open_fifo("/tmp/fifo_1", O_RDONLY);
         fifo2 = open_fifo("/tmp/fifo_2", O_RDONLY | O_NONBLOCK);
@@ -108,58 +105,63 @@ int main(int argc, char * argv[]) {
             ErrExit("atoi number of file failed");
 
         // Shared memory initialization
-        shmidMsg = alloc_shared_memory(key, sizeof(message_t) * (numFile > 50 ? 50 : numFile));
-        bufferMsg = get_shared_memory(shmidMsg, 0);
+        shmid = alloc_shared_memory(key, sizeof(message_t) * (numFile > 50 ? 50 : numFile));
+        shmbuf = get_shared_memory(shmid, 0);
 
         // Support vector initialization
-        shmidSupport = alloc_shared_memory(key_vector, sizeof(int) * numFile);
-        bufferSupport = (int *) get_shared_memory(shmidSupport, 0);
+        shmem_vector_id = alloc_shared_memory(key_vector, sizeof(int) * numFile);
+        shmem_vector = (int *) get_shared_memory(shmem_vector_id, 0);
 
         // Sending acknowledge to client
-        *bufferMsg = numFile;
-        semOp(sem_msgShMem, 0, 1);
+        *shmbuf = numFile;
+        semOp(sem_ack, 0, 1);
 
         // Initialization variables for reciving file part
         message_t msgRcv[numFile][MAX_PART];
         initMsgRcv(msgRcv);
-        shMem = (message_t *)bufferMsg;
+        shmem = (message_t *)shmbuf;
         numMsgRcv = 0;
         taken_position = -1;
 
         // Reciving file part
         while (numMsgRcv < numFile * 4){
-            //FIFO1
+            // FIFO1
             if(read(fifo1, &msg, sizeof(message_t)) > 0){
                 semOp(sem_limits, FIFO1, 1);
                 numMsgRcv++;
-                printf("\nChannel: FIFO1; Num_msg: %d\n", numMsgRcv);
                 addMsg(msg, FIFO1, msgRcv);
             }
-            //FIFO2
+            // FIFO2
             if(read(fifo2, &msg, sizeof(message_t)) > 0){
                 semOp(sem_limits, FIFO2, 1);
                 numMsgRcv++;
-                printf("\nChannel: FIFO2; Num_msg: %d\n", numMsgRcv);
                 addMsg(msg, FIFO2, msgRcv);
             }
-            //Message Queue
-            if(read_message_queue(msqid, msg) != -1){
+            // Message Queue
+            if(read_message_queue(msqid, &msg) != -1){
                 semOp(sem_limits, MSGQUEUE, 1);
                 numMsgRcv++;
-                printf("\nChannel: MsgQueue; Num_msg: %d\n", numMsgRcv);
                 addMsg(msg, MSGQUEUE, msgRcv);
             }
-            //Shared Memory
+            // Shared Memory
             if (semctl(sem_shmem, 0, GETVAL) > 0){
-                semOp(mutex_ShMem, 0, -1);
-                taken_position = indexOf(bufferSupport, numFile, 0);
-                msg = shMem[taken_position];
-                bufferSupport[taken_position] = 1;
-                semOp(mutex_ShMem, 0, 1);
+                // Try to acquire the mutex
+                semOp(mutex_shmem, 0, -1);
+
+                // Find the first taken index of the shmem using the support vector
+                taken_position = indexOf(shmem_vector, numFile, 0);
+                // Write the message to the desired index
+                msg = shmem[taken_position];
+                // Mark the position as free on the support vector
+                shmem_vector[taken_position] = 1;
+
+                // Release the mutex
+                semOp(mutex_shmem, 0, 1);
+                // Decrease counter of messages available on shmem
                 semOp(sem_shmem, 0, -1);
+
                 semOp(sem_limits, SHMEM, 1);
                 numMsgRcv++;
-                printf("\nChannel: ShdMem; Num_msg: %d\n", numMsgRcv);
                 addMsg(msg, SHMEM, msgRcv);
             }
         
@@ -169,22 +171,21 @@ int main(int argc, char * argv[]) {
         long confirmation = 200;
         msgsnd(msqid, &confirmation, 0, 0);
 
-        // Closing and deleting FIFO1
+        // Closing FIFO1 and FIFO2
         close(fifo1);
         close(fifo2);
-        unlink("/tmp/fifo_1");
 
         // Closing and detaching Shared memory and support vector
-        free_shared_memory(shMem);
-        remove_shared_memory(shmidMsg);
-        free_shared_memory(bufferSupport);
-        remove_shared_memory(shmidSupport);
+        free_shared_memory(shmem);
+        remove_shared_memory(shmid);
+        free_shared_memory(shmem_vector);
+        remove_shared_memory(shmem_vector_id);
 
         // Writing the message recived on file
         write_files(msgRcv);
 
         // Wait for client to receive ending signal
-        semOp(sem_msgShMem, 0, -1);
+        semOp(sem_ack, 0, -1);
 
         printf("\nWaiting for Ctrl-C to end or new file to receive...\n");
     }
@@ -192,7 +193,7 @@ int main(int argc, char * argv[]) {
     return 0;
 }
 
-// When Ctrl-C is pressed, all the ipc will close and the server process will terminate
+// When Ctrl-C is pressed, all the ipcs will close and the server process will terminate
 void signalHandler(int sig) {
     printf("\nTerminazione programma\n");
 
@@ -201,14 +202,14 @@ void signalHandler(int sig) {
     unlink("/tmp/fifo_1");
     unlink("/tmp/fifo_2");
 
-    remove_shared_memory(shmidMsg);
-    remove_shared_memory(shmidSupport);
+    remove_shared_memory(shmid);
+    remove_shared_memory(shmem_vector_id);
 
     remove_message_queue(msqid);
 
-    remove_semaphore(sem_msgShMem);
+    remove_semaphore(sem_ack);
     remove_semaphore(sem_limits);
-    remove_semaphore(mutex_ShMem);
+    remove_semaphore(mutex_shmem);
     remove_semaphore(sem_shmem);
 
     exit(0);
@@ -246,7 +247,7 @@ void write_files(message_t msgRcv[][MAX_PART]){
             sprintf(header, "[Parte %d del file \"%s\", spedita dal processo %d tramite %s]\n", j + 1, msgRcv[i][j].path, msgRcv[i][j].pid, channel[j]);
             write(fileOpen, header, strlen(header));
             write(fileOpen, msgRcv[i][j].chunk, strlen(msgRcv[i][j].chunk));
-            write(fileOpen, "\n", sizeof(char));
+            write(fileOpen, "\n\n", sizeof(char) * 2);
         }
         close(fileOpen);
     }

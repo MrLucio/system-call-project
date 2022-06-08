@@ -24,11 +24,10 @@ void remove_message_queue(int msqid){
 }
 
 // Read a message from message queue
-int read_message_queue(int msqid, message_t msg){
+int read_message_queue(int msqid, message_t *msg){
     messageQueue_t msgQueue;
     int response = msgrcv(msqid, &msgQueue, sizeof(message_t), 1, IPC_NOWAIT);
-    if (response != -1){
-        msg = msgQueue.msg;
-    }
+    if (response != -1)
+        memcpy(msg, &msgQueue.msg, sizeof(message_t));
     return response;
 }
